@@ -56,6 +56,7 @@ export const classInvitations = pgTable(
     role: text("role").notNull().default("student"),
     studentId: text("student_id").references(() => appUsers.id, { onDelete: "set null" }),
     status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

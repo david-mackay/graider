@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
         classId: classInvitations.classId,
         invitedEmail: classInvitations.invitedEmail,
         role: classInvitations.role,
+        expiresAt: classInvitations.expiresAt,
       })
       .from(classInvitations)
       .where(
@@ -33,6 +34,10 @@ export async function POST(request: NextRequest) {
 
     if (!invitation) {
       return NextResponse.json({ error: "Invalid or expired invite code." }, { status: 404 });
+    }
+
+    if (invitation.expiresAt && invitation.expiresAt < new Date()) {
+      return NextResponse.json({ error: "This invite code has expired." }, { status: 410 });
     }
 
     const invitedEmail = invitation.invitedEmail;
@@ -78,11 +83,6 @@ export async function POST(request: NextRequest) {
         status: "active",
       });
     }
-
-    await db
-      .update(classInvitations)
-      .set({ status: "accepted", studentId: user.id })
-      .where(eq(classInvitations.id, invitation.id));
 
     return NextResponse.json({ classId: invitation.classId, joined: true, role: assignedRole });
   } catch (error) {

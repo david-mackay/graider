@@ -48,6 +48,16 @@ type ClassMember = {
   email: string | null;
 };
 type GroupedQuestions = { topic: string; items: DashboardQuestion[] };
+type Invitation = {
+  id: string;
+  code: string;
+  role: "student" | "teacher";
+  status: string;
+  invited_email: string | null;
+  expires_at: string | null;
+  created_at: string | null;
+  accepted_by_name: string | null;
+};
 
 const ALL_CLASSES_VALUE = "__all__";
 
@@ -228,6 +238,9 @@ export default function HomePage() {
   const [ocrFeedback, setOcrFeedback] = useState<Record<string, string>>({});
   const [generatedInviteCodes, setGeneratedInviteCodes] = useState<Record<string, string>>({});
   const [generatedTeacherCodes, setGeneratedTeacherCodes] = useState<Record<string, string>>({});
+  const [invitesByClass, setInvitesByClass] = useState<Record<string, Invitation[]>>({});
+  const [expandedInviteClassId, setExpandedInviteClassId] = useState<string | null>(null);
+  const [inviteExpiry, setInviteExpiry] = useState<string>("0");
   const [copiedInviteCodeForClassId, setCopiedInviteCodeForClassId] = useState("");
 
   const [statusMessage, setStatusMessage] = useState("");
@@ -794,6 +807,74 @@ export default function HomePage() {
     }
   }
 
+  async function loadInvites(classId: string) {
+    try {
+      const payload = await handleJson<{ invitations: Invitation[] }>(
+        await fetch(`/api/classes/${classId}/invite`, { cache: "no-store" }),
+      );
+      setInvitesByClass((c) => ({ ...c, [classId]: payload.invitations }));
+    } catch (error) {
+      if (error instanceof Error) setStatus(error.message, "error");
+    }
+  }
+
+  async function generateInvite(classId: string, codeRole: "student" | "teacher") {
+    setIsBusy(true);
+    try {
+      const expiresInDays = Number(inviteExpiry) || undefined;
+      await handleJson(
+        await fetch(`/api/classes/${classId}/invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invited_email: null, role: codeRole, expires_in_days: expiresInDays }),
+        }),
+      );
+      setStatus(`New ${codeRole} invite code generated.`);
+      await loadInvites(classId);
+    } catch (error) {
+      if (error instanceof Error) setStatus(error.message, "error");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function deleteInvite(classId: string, invitationId: string) {
+    setIsBusy(true);
+    try {
+      await handleJson(
+        await fetch(`/api/classes/${classId}/invite`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invitationId }),
+        }),
+      );
+      setStatus("Invite code deleted.");
+      await loadInvites(classId);
+    } catch (error) {
+      if (error instanceof Error) setStatus(error.message, "error");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  function getInviteStatus(invite: Invitation): "active" | "expired" | "accepted" {
+    if (invite.status === "accepted") return "accepted";
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) return "expired";
+    return "active";
+  }
+
+  function formatExpiry(invite: Invitation): string {
+    if (!invite.expires_at) return "No expiry";
+    const exp = new Date(invite.expires_at);
+    const now = new Date();
+    if (exp < now) return "Expired";
+    const diffMs = exp.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return "Expires today";
+    if (diffDays === 1) return "Expires tomorrow";
+    return `Expires in ${diffDays} days`;
+  }
+
   // ─── Loading ───────────────────────────────────────────────────────────────
 
   if (!isLoaded) {
@@ -1167,8 +1248,6 @@ export default function HomePage() {
                     ) : (
                       <div className="space-y-3">
                         {classes.map((entry) => {
-                          const inviteCode = generatedInviteCodes[entry.id] ?? entry.invite_code;
-                          const isCopied = copiedInviteCodeForClassId === entry.id;
                           const isSelected = selectedClassId === entry.id;
                           const classTests = tests.filter((t) => t.class_id === entry.id);
                           return (
@@ -1188,75 +1267,116 @@ export default function HomePage() {
                                     {classTests.length} test{classTests.length !== 1 ? "s" : ""}
                                   </p>
                                   {entry.role_in_class === "teacher" ? (
-                                    <div className="mt-2.5 space-y-2">
-                                      {([
-                                        { label: "Student code", role: "student" as const, code: generatedInviteCodes[entry.id] ?? entry.invite_code },
-                                        { label: "Teacher code", role: "teacher" as const, code: generatedTeacherCodes[entry.id] ?? null },
-                                      ] as const).map(({ label, role: codeRole, code }) => (
-                                        <div key={codeRole} className="flex items-center gap-2">
-                                          <span className="text-xs text-slate-400 w-20 flex-shrink-0">{label}:</span>
-                                          {code ? (
-                                            <>
-                                              <code className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-mono text-indigo-700 border border-indigo-100">
-                                                {code}
-                                              </code>
-                                              <button
-                                                type="button"
-                                                onClick={() => void copyInviteCode(`${entry.id}-${codeRole}`, code)}
-                                                className="cursor-pointer flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors duration-150"
+                                    <div className="mt-2.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = expandedInviteClassId === entry.id ? null : entry.id;
+                                          setExpandedInviteClassId(next);
+                                          if (next && !invitesByClass[next]) void loadInvites(next);
+                                        }}
+                                        className="cursor-pointer text-xs font-medium text-indigo-500 hover:text-indigo-700 transition-colors duration-150"
+                                      >
+                                        {expandedInviteClassId === entry.id ? "Hide invites" : "Manage invites"}
+                                      </button>
+
+                                      {expandedInviteClassId === entry.id ? (
+                                        <div className="mt-3 space-y-4 border-t border-indigo-100 pt-3">
+                                          {/* Generate section */}
+                                          <div className="flex flex-wrap items-end gap-2">
+                                            <div>
+                                              <label className="text-xs font-medium text-slate-500">Expiry</label>
+                                              <select
+                                                className="mt-0.5 block w-full cursor-pointer rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-xs text-indigo-900 outline-none focus:border-indigo-400 transition-colors duration-150"
+                                                value={inviteExpiry}
+                                                onChange={(e) => setInviteExpiry(e.target.value)}
                                               >
-                                                {copiedInviteCodeForClassId === `${entry.id}-${codeRole}` ? (
-                                                  <>
-                                                    <IconCheck className="h-3 w-3 text-emerald-600" />
-                                                    <span className="text-emerald-600">Copied</span>
-                                                  </>
-                                                ) : (
-                                                  <>
-                                                    <IconCopy className="h-3 w-3" />
-                                                    Copy
-                                                  </>
-                                                )}
-                                              </button>
-                                            </>
-                                          ) : null}
-                                          <button
-                                            type="button"
-                                            disabled={isBusy}
-                                            onClick={async () => {
-                                              setIsBusy(true);
-                                              try {
-                                                const payload = await handleJson<{ invitation_code: string }>(
-                                                  await fetch(`/api/classes/${entry.id}/invite`, {
-                                                    method: "POST",
-                                                    headers: { "Content-Type": "application/json" },
-                                                    body: JSON.stringify({ invited_email: null, role: codeRole }),
-                                                  }),
+                                                <option value="0">No expiry</option>
+                                                <option value="1">1 day</option>
+                                                <option value="7">7 days</option>
+                                                <option value="30">30 days</option>
+                                              </select>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              disabled={isBusy}
+                                              onClick={() => void generateInvite(entry.id, "student")}
+                                              className={`${btnPrimary} py-1.5 px-3 text-xs`}
+                                            >
+                                              + Student code
+                                            </button>
+                                            <button
+                                              type="button"
+                                              disabled={isBusy}
+                                              onClick={() => void generateInvite(entry.id, "teacher")}
+                                              className={`${btnSecondary} py-1.5 px-3 text-xs`}
+                                            >
+                                              + Teacher code
+                                            </button>
+                                          </div>
+
+                                          {/* Invitations list */}
+                                          {(invitesByClass[entry.id] ?? []).length === 0 ? (
+                                            <p className="text-xs text-slate-400">No invite codes yet. Generate one above.</p>
+                                          ) : (
+                                            <div className="space-y-1.5">
+                                              {(invitesByClass[entry.id] ?? []).map((inv) => {
+                                                const derivedStatus = getInviteStatus(inv);
+                                                return (
+                                                  <div
+                                                    key={inv.id}
+                                                    className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+                                                      derivedStatus === "accepted"
+                                                        ? "border-slate-100 bg-slate-50/50"
+                                                        : derivedStatus === "expired"
+                                                          ? "border-red-100 bg-red-50/30"
+                                                          : "border-indigo-100 bg-white"
+                                                    }`}
+                                                  >
+                                                    <code className="font-mono font-semibold text-indigo-700">{inv.code}</code>
+                                                    <Badge variant={inv.role === "teacher" ? "blue" : "gray"}>
+                                                      {inv.role}
+                                                    </Badge>
+                                                    <Badge variant={derivedStatus === "active" ? "green" : derivedStatus === "expired" ? "yellow" : "gray"}>
+                                                      {derivedStatus}
+                                                    </Badge>
+                                                    <span className="text-slate-400">
+                                                      {derivedStatus === "accepted" && inv.accepted_by_name
+                                                        ? inv.accepted_by_name
+                                                        : formatExpiry(inv)}
+                                                    </span>
+                                                    <div className="ml-auto flex items-center gap-1.5">
+                                                      {derivedStatus === "active" ? (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => void copyInviteCode(inv.id, inv.code)}
+                                                          className="cursor-pointer flex items-center gap-1 rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors duration-150"
+                                                        >
+                                                          {copiedInviteCodeForClassId === inv.id ? (
+                                                            <IconCheck className="h-3 w-3 text-emerald-600" />
+                                                          ) : (
+                                                            <IconCopy className="h-3 w-3" />
+                                                          )}
+                                                        </button>
+                                                      ) : null}
+                                                      {derivedStatus !== "accepted" ? (
+                                                        <button
+                                                          type="button"
+                                                          disabled={isBusy}
+                                                          onClick={() => void deleteInvite(entry.id, inv.id)}
+                                                          className="cursor-pointer rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
+                                                        >
+                                                          <IconX className="h-3 w-3" />
+                                                        </button>
+                                                      ) : null}
+                                                    </div>
+                                                  </div>
                                                 );
-                                                if (codeRole === "teacher") {
-                                                  setGeneratedTeacherCodes((c) => ({ ...c, [entry.id]: payload.invitation_code }));
-                                                } else {
-                                                  setGeneratedInviteCodes((c) => ({ ...c, [entry.id]: payload.invitation_code }));
-                                                }
-                                                setStatus(`New ${codeRole} invite code generated`);
-                                              } catch (err) {
-                                                if (err instanceof Error) setStatus(err.message, "error");
-                                              } finally {
-                                                setIsBusy(false);
-                                              }
-                                            }}
-                                            className="cursor-pointer text-xs text-indigo-400 hover:text-indigo-600 transition-colors duration-150 underline"
-                                          >
-                                            {code ? "New" : "Generate"}
-                                          </button>
+                                              })}
+                                            </div>
+                                          )}
                                         </div>
-                                      ))}
-                                    </div>
-                                  ) : inviteCode ? (
-                                    <div className="mt-2.5 flex items-center gap-2">
-                                      <span className="text-xs text-slate-400">Invite code:</span>
-                                      <code className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-mono text-indigo-700 border border-indigo-100">
-                                        {inviteCode}
-                                      </code>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                 </div>
