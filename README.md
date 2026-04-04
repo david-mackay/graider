@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Graider AI Test Marking
 
-## Getting Started
+## Setup
 
-First, run the development server:
+1. Install dependencies
+
+```bash
+npm install
+```
+
+2. Copy environment variables
+
+```bash
+cp .env.example .env.local
+```
+
+3. Add the required values to `.env.local`:
+
+- Clerk publishable and secret keys
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENROUTER_API_KEY`
+
+Clerk uses keyless mode by default, so you can run without setting Clerk keys first.
+
+4. Run migrations with Drizzle ORM:
+
+- Ensure `DATABASE_URL` is set in `.env.local` (PostgreSQL connection to your Supabase DB).
+- Keep `supabase/schema.sql` as source SQL for manual edits if needed.
+
+Initialize/refresh schema with:
+
+```bash
+pnpm run db:push
+```
+
+This runs `drizzle-kit push` from the repo scripts.
+
+5. Create the storage bucket:
+
+- Bucket name: `test-uploads` (or match `SUPABASE_TEST_UPLOAD_BUCKET` in env).
+
+6. Run the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## App flows
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Roles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Users can switch role (Student / Teacher) in-app to test both workflows. A new Clerk user is created with role `student` by default in the `app_users` table.
 
-## Learn More
+### Teacher workflow
 
-To learn more about Next.js, take a look at the following resources:
+- Build and edit question bank entries.
+- Create reusable tests from question banks.
+- Grade student submissions in one click with OpenRouter.
+- Upload handwritten test photos and run OCR to auto-populate answers.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Student workflow
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Browse available tests.
+- Submit all question answers.
+- Receive AI-graded marks and feedback when teachers grade submissions.
 
-## Deploy on Vercel
+### AI request contract for grading
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+For each question, the grader sends:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `question`
+- `marks`
+- `teacher_answer`
+- `student_answer`
+
+Expected response:
+
+```json
+{ "marks_earned": 3, "feedback": "did not identify root cause" }
+```
+
+The marks are normalized by the backend and then stored per answer and summed on each attempt.
+
+### OCR contract
+
+OCR extracts an array like:
+
+```json
+{ "answers": [{ "question": "Question 1...", "answer": "Student response...", "question_index": 0 }] }
+```
+
+Then matching attempts are upserted into the submission answers.
