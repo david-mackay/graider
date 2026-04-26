@@ -2,199 +2,48 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SignInButton, useUser } from "@clerk/nextjs";
+import { type AppRole, type OcrAnswer, type TestDetail } from "@/lib/types";
 import {
-  type AppRole,
-  type OcrAnswer,
-  type QuestionBankQuestion,
-  type SchoolClass,
-  type TestAttempt,
-  type TestDetail,
-  type TestSummary,
-} from "@/lib/types";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type ActiveView = "classes" | "questions" | "tests" | "students";
-
-type DashboardQuestion = QuestionBankQuestion;
-type DashboardTest = TestSummary;
-type DashboardAttempt = TestAttempt & { test_title: string; test_class_id?: string | null };
-type GradedAttemptQuestion = {
-  question_id: string;
-  prompt: string;
-  student_answer: string;
-  marks: number;
-  marks_earned: number | null;
-  feedback: string | null;
-};
-type GradedAttemptDetail = {
-  id: string;
-  test_id: string;
-  test_title: string;
-  student_id: string;
-  status: "draft" | "submitted" | "graded";
-  total_marks: number | null;
-  max_marks: number | null;
-  test_class_id?: string | null;
-  questions: GradedAttemptQuestion[];
-};
-type DashboardClass = SchoolClass & { role_in_class?: "teacher" | "student" };
-type AttemptAnswerPayload = { question_id: string; answer: string };
-type ClassMember = {
-  user_id: string;
-  role: "teacher" | "student";
-  status: "active" | "pending";
-  full_name: string | null;
-  email: string | null;
-};
-type GroupedQuestions = { topic: string; items: DashboardQuestion[] };
-type Invitation = {
-  id: string;
-  code: string;
-  role: "student" | "teacher";
-  status: string;
-  invited_email: string | null;
-  expires_at: string | null;
-  created_at: string | null;
-  accepted_by_name: string | null;
-};
-
-const ALL_CLASSES_VALUE = "__all__";
-
-function normalizeTopic(topic: string | null | undefined): string {
-  const trimmed = topic?.trim();
-  return trimmed ? trimmed : "General";
-}
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
-
-function IconHome({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-    </svg>
-  );
-}
-
-function IconBook({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
-    </svg>
-  );
-}
-
-function IconClipboard({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
-    </svg>
-  );
-}
-
-function IconUsers({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-    </svg>
-  );
-}
-
-function IconMenu({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-    </svg>
-  );
-}
-
-function IconX({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-    </svg>
-  );
-}
-
-function IconCheck({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
-  );
-}
-
-function IconCopy({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
-    </svg>
-  );
-}
-
-// ─── Small reusable UI pieces ─────────────────────────────────────────────────
-
-function Badge({ children, variant = "blue" }: { children: React.ReactNode; variant?: "blue" | "green" | "gray" | "yellow" }) {
-  const colors = {
-    blue: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
-    green: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-    gray: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-    yellow: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  };
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[variant]}`}>
-      {children}
-    </span>
-  );
-}
-
-function SectionHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
-  return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h2 className="text-xl font-bold text-indigo-950">{title}</h2>
-        {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
-      </div>
-      {action ? <div>{action}</div> : null}
-    </div>
-  );
-}
-
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-xl border border-indigo-100 bg-white p-5 shadow-sm ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function FormField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <div className="grid gap-1.5">
-      <div>
-        <label className="text-sm font-medium text-slate-700">{label}</label>
-        {hint ? <p className="mt-0.5 text-xs text-slate-400">{hint}</p> : null}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-const inputClass =
-  "w-full rounded-lg border border-indigo-200 bg-white px-3 py-2.5 text-sm text-indigo-950 placeholder-slate-400 outline-none transition duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
-
-const btnPrimary =
-  "inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed";
-
-const btnSecondary =
-  "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50 active:bg-indigo-100 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed";
-
-const btnDanger =
-  "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors duration-150 disabled:opacity-50";
+  ALL_CLASSES_VALUE,
+  handleJson,
+  normalizeTopic,
+  type AttemptAnswerPayload,
+} from "@/lib/dashboard-client";
+import type {
+  ActiveView,
+  ClassMember,
+  DashboardAttempt,
+  DashboardClass,
+  DashboardQuestion,
+  DashboardTest,
+  GradedAttemptDetail,
+  GroupedQuestions,
+  Invitation,
+} from "@/lib/dashboard-types";
+import {
+  IconBook,
+  IconCheck,
+  IconClipboard,
+  IconCopy,
+  IconHome,
+  IconMenu,
+  IconUsers,
+  IconX,
+} from "@/components/shared/icons";
+import {
+  Badge,
+  Card,
+  FormField,
+  SectionHeader,
+  btnDanger,
+  btnPrimary,
+  btnSecondary,
+  inputClass,
+} from "@/components/shared/ui";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function HomePage() {
+export default function LegacyApp() {
   const { isLoaded, isSignedIn } = useUser();
   const [role, setRole] = useState<AppRole>("student");
   const [profileName, setProfileName] = useState<string | null>(null);
@@ -349,12 +198,6 @@ export default function HomePage() {
     if (message) {
       window.setTimeout(() => setStatusMessage(""), 5000);
     }
-  }
-
-  async function handleJson<T>(response: Response) {
-    const payload = (await response.json()) as { error?: string; [key: string]: unknown };
-    if (!response.ok) throw new Error(payload.error ?? "Unexpected error");
-    return payload as T;
   }
 
   async function loadDashboard() {
