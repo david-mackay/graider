@@ -92,3 +92,26 @@ export type OcrAnswer = {
   answer: string;
   question_index?: number | null;
 };
+
+export type OcrPage = {
+  pageIndex: number;
+  studentNameGuess: string;
+  confidence: number;
+  answers: OcrAnswer[];
+};
+
+export type RosterEntry = {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
+export type TeacherAttemptRequest = {
+  testId: string;
+  studentId: string;
+};
+
+export type TeacherAttemptResponse = {
+  attempt_id: string;
+  created: boolean;
+};

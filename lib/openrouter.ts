@@ -1,4 +1,4 @@
-import { OcrAnswer } from "@/lib/types";
+import { OcrAnswer, OcrPage } from "@/lib/types";
 
 export type GradeResult = {
   marks_earned: number;
@@ -174,4 +174,109 @@ export async function extractHandwrittenAnswers(
       };
     })
     .filter((entry): entry is OcrAnswer => Boolean(entry && entry.question && entry.answer));
+}
+
+function coerceAnswerEntry(entry: unknown): OcrAnswer | null {
+  if (typeof entry !== "object" || entry === null) {
+    return null;
+  }
+  const record = entry as Record<string, unknown>;
+  const question = typeof record.question === "string" ? record.question : "";
+  const answer = typeof record.answer === "string" ? record.answer : "";
+  if (!question && !answer) {
+    return null;
+  }
+  const rawIndex = record.question_index;
+  const questionIndex =
+    typeof rawIndex === "number" && Number.isFinite(rawIndex) ? rawIndex : null;
+  return {
+    question,
+    answer,
+    question_index: questionIndex,
+  };
+}
+
+export async function extractHandwrittenStack(
+  images: { filename: string; mimeType: string; base64: string }[],
+): Promise<OcrPage[]> {
+  if (images.length === 0) {
+    return [];
+  }
+
+  const imageParts = images.map((entry) => ({
+    type: "image_url" as const,
+    image_url: {
+      url: `data:${entry.mimeType};base64,${entry.base64}`,
+    },
+  }));
+
+  const textPrompt = {
+    type: "text" as const,
+    text:
+      `You are reading ${images.length} photographed handwritten test paper${images.length === 1 ? "" : "s"}, ` +
+      "one student per page. The pages are provided in order; treat each image as a separate page indexed starting at 0. " +
+      "For each page do two things: (1) read the student's name written at the top of the paper (handwritten name field), " +
+      "and (2) extract every question and the student's corresponding answer exactly as written. " +
+      "Return strict JSON with this exact shape and one entry per image, in order: " +
+      "{\"pages\":[{\"pageIndex\":0,\"studentName\":\"...\",\"confidence\":0.9," +
+      "\"answers\":[{\"question\":\"...\",\"answer\":\"...\",\"question_index\":0}]}]}. " +
+      "Rules for studentName and confidence: if the name is clearly printed and legible, use confidence 0.9 or higher. " +
+      "If the handwriting is messy but you can make a reasonable guess, use confidence between 0.4 and 0.7. " +
+      "If no name is visible or it is completely unreadable, return an empty string for studentName and confidence 0. " +
+      "question_index is the position number written on the paper if visible, otherwise omit it or use null. " +
+      "Always return exactly one entry in pages for each input image, even if a page is blank (return empty answers and empty studentName).",
+  };
+
+  const parsed = await callOpenRouter(
+    [
+      {
+        role: "system",
+        content:
+          "You extract text from photographed handwritten exam pages and output strict JSON only. Never include commentary outside the JSON.",
+      },
+      {
+        role: "user",
+        content: [textPrompt, ...imageParts],
+      },
+    ],
+    DEFAULT_VISION_MODEL,
+  );
+
+  const rawPages = (parsed as Record<string, unknown>).pages;
+  const pageEntries = Array.isArray(rawPages) ? rawPages : [];
+
+  return images.map((_image, index): OcrPage => {
+    const candidate = pageEntries[index];
+    if (typeof candidate !== "object" || candidate === null) {
+      return {
+        pageIndex: index,
+        studentNameGuess: "",
+        confidence: 0,
+        answers: [],
+      };
+    }
+
+    const record = candidate as Record<string, unknown>;
+    const studentNameGuess =
+      typeof record.studentName === "string" ? record.studentName.trim() : "";
+
+    const confidenceRaw = Number(record.confidence);
+    let confidence = Number.isFinite(confidenceRaw) ? confidenceRaw : 0;
+    if (confidence < 0) confidence = 0;
+    if (confidence > 1) confidence = 1;
+
+    const rawAnswers = record.answers;
+    const answers = Array.isArray(rawAnswers)
+      ? (rawAnswers as unknown[])
+          .map((entry) => coerceAnswerEntry(entry))
+          .filter((entry): entry is OcrAnswer => entry !== null)
+      : [];
+
+    return {
+      pageIndex: index,
+      studentNameGuess,
+      confidence: studentNameGuess ? confidence : 0,
+      answers,
+    };
+  });
 }
