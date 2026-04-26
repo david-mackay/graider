@@ -1,5 +1,5 @@
-import LegacyApp from "@/components/_legacy/LegacyApp";
+import StudentDashboard from "@/components/student/StudentDashboard";
 
 export default function StudentHomePage() {
-  return <LegacyApp />;
+  return <StudentDashboard />;
 }
