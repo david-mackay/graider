@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { SignInButton } from "@clerk/nextjs";
+import VaultResumeGate from "@/components/marketing/VaultResumeGate";
 
 export default function LandingPage() {
   return (
     <div className="min-h-[calc(100vh-3.5rem)] overflow-hidden">
+      <VaultResumeGate />
       {/* Hero */}
       <div className="relative bg-gradient-to-b from-indigo-50/80 via-white to-violet-50/40">
         <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-[500px] w-[800px] rounded-full bg-gradient-to-br from-indigo-200/40 via-violet-200/30 to-transparent blur-3xl" />
@@ -34,14 +37,12 @@ export default function LandingPage() {
             Build question banks, collect submissions, and let AI deliver instant grades and feedback.
           </p>
           <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <SignInButton mode="modal">
-              <button
-                type="button"
-                className="cursor-pointer w-full sm:w-auto rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 hover:from-indigo-700 hover:to-violet-700 transition-all duration-200"
-              >
-                Get started free
-              </button>
-            </SignInButton>
+            <Link
+              href="/onboarding/hook"
+              className="cursor-pointer w-full sm:w-auto rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 hover:from-indigo-700 hover:to-violet-700 transition-all duration-200 text-center"
+            >
+              Show me how it works
+            </Link>
           </div>
           <p className="mt-3 text-xs text-slate-400">No credit card required</p>
         </div>
