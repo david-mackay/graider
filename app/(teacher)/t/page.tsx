@@ -1,0 +1,5 @@
+import LegacyApp from "@/components/_legacy/LegacyApp";
+
+export default function TeacherHomePage() {
+  return <LegacyApp />;
+}

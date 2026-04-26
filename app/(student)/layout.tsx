@@ -1,15 +1,17 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth";
-import LegacyApp from "@/components/_legacy/LegacyApp";
 
-export default async function RootPage() {
+export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-
   if (!session?.userId) {
-    return <LegacyApp />;
+    redirect("/");
   }
 
   const user = await getCurrentUser();
-  redirect(user.role === "teacher" ? "/t" : "/s");
+  if (user.role === "teacher") {
+    redirect("/t");
+  }
+
+  return <>{children}</>;
 }
