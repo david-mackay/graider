@@ -50,7 +50,6 @@ export default function LegacyApp() {
   const [role, setRole] = useState<AppRole>("student");
   const [profileName, setProfileName] = useState<string | null>(null);
   const [needsProfile, setNeedsProfile] = useState(false);
-  const [profileFormName, setProfileFormName] = useState("");
   const [profileFormRole, setProfileFormRole] = useState<AppRole>("student");
 
   const [activeView, setActiveView] = useState<ActiveView>("classes");
@@ -714,7 +713,7 @@ export default function LegacyApp() {
   if (needsProfile) {
     return (
       <ProfileSetup
-        initialName={profileFormName}
+        initialName=""
         initialRole={profileFormRole}
         onComplete={async ({ full_name, role: nextRole }) => {
           setNeedsProfile(false);
