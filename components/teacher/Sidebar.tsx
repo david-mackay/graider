@@ -1,6 +1,7 @@
 "use client";
 
-import { IconBook, IconClipboard, IconHome, IconUsers } from "@/components/shared/icons";
+import Link from "next/link";
+import { IconBook, IconClipboard, IconHome, IconSparkle, IconUsers } from "@/components/shared/icons";
 import { ALL_CLASSES_VALUE } from "@/lib/dashboard-client";
 import type { ActiveView, DashboardClass } from "@/lib/dashboard-types";
 
@@ -34,6 +35,15 @@ export default function TeacherSidebar({
 
   return (
     <div className="flex flex-col h-full">
+      <div className="p-3 border-b border-indigo-100/60">
+        <Link
+          href="/t/grade"
+          className="group flex w-full items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-indigo-700 active:bg-indigo-800"
+        >
+          <IconSparkle className="h-4 w-4 flex-shrink-0" />
+          <span>Grade a stack</span>
+        </Link>
+      </div>
       <div className="p-4 border-b border-indigo-100/60">
         <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-300">Active class</p>
         <select
