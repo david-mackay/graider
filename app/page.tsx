@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth";
-import LegacyApp from "@/components/_legacy/LegacyApp";
+import LandingPage from "@/components/marketing/LandingPage";
 
 export default async function RootPage() {
   const session = await auth();
 
   if (!session?.userId) {
-    return <LegacyApp />;
+    return <LandingPage />;
   }
 
   const user = await getCurrentUser();
