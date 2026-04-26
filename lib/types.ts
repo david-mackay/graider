@@ -145,3 +145,10 @@ export type StackPerStudentResult = {
 export type StackPreview = { pages: StackPagePreview[] };
 
 export type StackCommitResult = { results: StackPerStudentResult[] };
+
+export type SampleGradeResponse = {
+  marksEarned: number;
+  maxMarks: number;
+  feedback: string;
+  ocrAnswerText: string;
+};
