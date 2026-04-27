@@ -152,3 +152,10 @@ export type SampleGradeResponse = {
   feedback: string;
   ocrAnswerText: string;
 };
+
+export type OnboardingSyncResponse = {
+  classId: string;
+  testId: string;
+  attemptId: string;
+  created: boolean;
+};

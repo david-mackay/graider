@@ -71,7 +71,7 @@ export default function OnboardingSavePage() {
         </Card>
 
         <div className="pt-2">
-          <SignInButton mode="modal" fallbackRedirectUrl="/t/onboarding-sync">
+          <SignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
             <button
               type="button"
               className="cursor-pointer w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 hover:from-indigo-700 hover:to-violet-700 transition-all duration-200"
@@ -81,7 +81,7 @@ export default function OnboardingSavePage() {
           </SignInButton>
           <p className="mt-3 text-center text-xs text-slate-400">
             Already have an account?{" "}
-            <SignInButton mode="modal" fallbackRedirectUrl="/t/onboarding-sync">
+            <SignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
               <button type="button" className="cursor-pointer font-semibold text-indigo-600 hover:text-indigo-700">
                 Sign in
               </button>
