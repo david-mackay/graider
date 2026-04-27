@@ -6,6 +6,7 @@ import OnboardingShell from "@/components/marketing/OnboardingShell";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { IconClipboard, IconX } from "@/components/shared/icons";
 import { getVault, setVault } from "@/lib/onboarding/vault";
+import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -37,15 +38,18 @@ export default function OnboardingUploadPage() {
 
   // Guard: must have answerKey to be here.
   useEffect(() => {
+    fireEvent(ONBOARDING_EVENTS.PAPER_UPLOAD);
     const vault = getVault();
     if (!vault?.answerKey) {
       router.replace("/onboarding/answer-key");
     }
   }, [router]);
 
-  // Manage object URL lifetime.
+  // Manage object URL lifetime. setState here is the intent — we're
+  // synchronizing a derived URL with the external File object lifecycle.
   useEffect(() => {
     if (!file) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreviewUrl(null);
       return;
     }

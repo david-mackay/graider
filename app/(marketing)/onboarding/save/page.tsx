@@ -7,13 +7,17 @@ import OnboardingShell from "@/components/marketing/OnboardingShell";
 import { Card } from "@/components/shared/ui";
 import { IconSparkle } from "@/components/shared/icons";
 import { getResumeStep, getVault } from "@/lib/onboarding/vault";
+import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 import type { OnboardingSampleGrade } from "@/lib/onboarding/types";
 
 export default function OnboardingSavePage() {
   const router = useRouter();
   const [grade, setGrade] = useState<OnboardingSampleGrade | null>(null);
 
+  // Hydrate from vault on mount. Calling setGrade in the effect is the
+  // intent — we're synchronizing local component state with localStorage.
   useEffect(() => {
+    fireEvent(ONBOARDING_EVENTS.SAVE_PROGRESS);
     const vault = getVault();
     if (!vault) {
       router.replace("/onboarding/hook");
@@ -24,6 +28,7 @@ export default function OnboardingSavePage() {
       router.replace(`/onboarding/${step}`);
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setGrade(vault.sampleGrade);
   }, [router]);
 
@@ -74,6 +79,7 @@ export default function OnboardingSavePage() {
           <SignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
             <button
               type="button"
+              onClick={() => fireEvent(ONBOARDING_EVENTS.AUTH_STARTED)}
               className="cursor-pointer w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 hover:from-indigo-700 hover:to-violet-700 transition-all duration-200"
             >
               Save my progress &mdash; sign up free
@@ -82,7 +88,11 @@ export default function OnboardingSavePage() {
           <p className="mt-3 text-center text-xs text-slate-400">
             Already have an account?{" "}
             <SignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
-              <button type="button" className="cursor-pointer font-semibold text-indigo-600 hover:text-indigo-700">
+              <button
+                type="button"
+                onClick={() => fireEvent(ONBOARDING_EVENTS.AUTH_STARTED)}
+                className="cursor-pointer font-semibold text-indigo-600 hover:text-indigo-700"
+              >
                 Sign in
               </button>
             </SignInButton>

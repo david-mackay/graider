@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
 import { Card } from "@/components/shared/ui";
 import { IconSparkle } from "@/components/shared/icons";
+import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 
 type Capability = {
   emoji: string;
@@ -31,6 +33,10 @@ const CAPABILITIES: Capability[] = [
 ];
 
 export default function OnboardingCapabilitiesPage() {
+  useEffect(() => {
+    fireEvent(ONBOARDING_EVENTS.CAPABILITIES);
+  }, []);
+
   return (
     <OnboardingShell step={2} backHref="/onboarding/hook">
       <div className="text-center">

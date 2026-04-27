@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { IconSparkle } from "@/components/shared/icons";
 import { clearVault, getVault } from "@/lib/onboarding/vault";
+import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 import type { OnboardingSyncResponse } from "@/lib/types";
 
 type SyncState =
@@ -41,6 +42,7 @@ export default function OnboardingSyncPage() {
         });
         return;
       }
+      fireEvent(ONBOARDING_EVENTS.CLASS_SYNCED, { created: payload.created });
       clearVault();
       setState({ kind: "redirecting" });
       router.replace("/t/grade?welcome=1");
@@ -55,6 +57,7 @@ export default function OnboardingSyncPage() {
   useEffect(() => {
     if (ranRef.current) return;
     ranRef.current = true;
+    fireEvent(ONBOARDING_EVENTS.AUTH_COMPLETE);
     void runSync();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

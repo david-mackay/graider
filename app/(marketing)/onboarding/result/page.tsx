@@ -8,6 +8,7 @@ import SocialProofCard from "@/components/marketing/SocialProofCard";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { IconSparkle } from "@/components/shared/icons";
 import { getResumeStep, getVault, setVault } from "@/lib/onboarding/vault";
+import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 import type { OnboardingSampleGrade } from "@/lib/onboarding/types";
 import type { SampleGradeResponse } from "@/lib/types";
 
@@ -30,9 +31,15 @@ export default function OnboardingResultPage() {
   const [state, setState] = useState<ResultState>({ kind: "loading" });
   const ranRef = useRef(false);
 
+  // The effect drives the entire fetch lifecycle from a localStorage read,
+  // so setState calls in it are intentional. Suppress the React 19 rule
+  // for the body of this effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (ranRef.current) return;
     ranRef.current = true;
+
+    fireEvent(ONBOARDING_EVENTS.FIRST_GRADE_RENDERED);
 
     const vault = getVault();
     if (!vault) {
@@ -105,6 +112,7 @@ export default function OnboardingResultPage() {
       }
     })();
   }, [router]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <OnboardingShell step={5} backHref="/onboarding/upload" backLabel="Re-upload">

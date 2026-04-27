@@ -10,6 +10,7 @@ import {
 } from "@/components/shared/ui";
 import { IconClipboard } from "@/components/shared/icons";
 import { getVault, setVault } from "@/lib/onboarding/vault";
+import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 
 const DEFAULT_PROMPT =
   "Name two functions of the mitochondria.";
@@ -23,13 +24,18 @@ export default function OnboardingAnswerKeyPage() {
   const [marks, setMarks] = useState(5);
   const [error, setError] = useState<string | null>(null);
 
-  // Hydrate from vault if user is returning to edit.
+  // Hydrate from vault if user is returning to edit. We can't use lazy
+  // initial state because the form must match the SSR render (empty) and
+  // populate on first client render to avoid a hydration mismatch.
   useEffect(() => {
+    fireEvent(ONBOARDING_EVENTS.ANSWER_KEY);
     const vault = getVault();
     if (vault?.answerKey) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setPrompt(vault.answerKey.prompt);
       setCorrectAnswer(vault.answerKey.correctAnswer);
       setMarks(vault.answerKey.marks);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, []);
 

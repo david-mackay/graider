@@ -1,10 +1,16 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
 import { IconSparkle } from "@/components/shared/icons";
+import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 
 export default function OnboardingHookPage() {
+  useEffect(() => {
+    fireEvent(ONBOARDING_EVENTS.EMOTIONAL_HOOK);
+  }, []);
+
   return (
     <OnboardingShell step={1}>
       <div className="text-center">
