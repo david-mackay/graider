@@ -92,3 +92,70 @@ export type OcrAnswer = {
   answer: string;
   question_index?: number | null;
 };
+
+export type OcrPage = {
+  pageIndex: number;
+  studentNameGuess: string;
+  confidence: number;
+  answers: OcrAnswer[];
+};
+
+export type RosterEntry = {
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
+export type TeacherAttemptRequest = {
+  testId: string;
+  studentId: string;
+};
+
+export type TeacherAttemptResponse = {
+  attempt_id: string;
+  created: boolean;
+};
+
+export type StackPagePreview = {
+  pageIndex: number;
+  studentNameGuess: string;
+  confidence: number;
+  suggestedStudentId: string | null; // from "exact" match
+  candidates: string[]; // from "fuzzy" match (studentIds)
+  status: "exact" | "fuzzy" | "unmatched";
+  ocrAnswers: OcrAnswer[];
+  storagePath: string | null; // path of the uploaded image, for the wizard to display
+};
+
+export type StackAssignment = {
+  pageIndex: number;
+  studentId: string;
+  ocrAnswers: OcrAnswer[];
+};
+
+export type StackPerStudentResult = {
+  studentId: string;
+  attemptId: string;
+  created: boolean;
+  totalMarks: number;
+  maxMarks: number;
+  grades: { questionId: string; marksEarned: number; feedback: string }[];
+};
+
+export type StackPreview = { pages: StackPagePreview[] };
+
+export type StackCommitResult = { results: StackPerStudentResult[] };
+
+export type SampleGradeResponse = {
+  marksEarned: number;
+  maxMarks: number;
+  feedback: string;
+  ocrAnswerText: string;
+};
+
+export type OnboardingSyncResponse = {
+  classId: string;
+  testId: string;
+  attemptId: string;
+  created: boolean;
+};

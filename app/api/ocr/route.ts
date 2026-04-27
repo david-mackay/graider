@@ -6,16 +6,9 @@ import { extractHandwrittenAnswers } from "@/lib/openrouter";
 import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, ocrBatches } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { normalizeQuestion } from "@/lib/stack-grading";
 
 export const runtime = "nodejs";
-
-function normalizeQuestion(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[^a-z0-9 ]/g, "")
-    .trim();
-}
 
 function isFileLike(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
