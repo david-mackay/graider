@@ -24,37 +24,37 @@ export default function TestTakingForm({
   const totalMarks = test.questions.reduce((sum, q) => sum + q.marks, 0);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#f5f3ff] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-cream overflow-y-auto">
       <div className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400">In progress</p>
-            <h2 className="mt-0.5 text-xl font-bold text-indigo-950">{test.title}</h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-pen">In progress</p>
+            <h2 className="mt-1 font-display text-2xl font-semibold text-ink">{test.title}</h2>
+            <p className="mt-1 text-sm text-ink-faint">
               {test.questions.length} question{test.questions.length !== 1 ? "s" : ""} · {totalMarks} marks
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="cursor-pointer rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-indigo-50 transition-colors duration-150"
+            className="cursor-pointer rounded-xl border border-line bg-paper px-3 py-2 text-sm font-medium text-ink-soft hover:bg-cream transition-colors duration-150"
           >
             Exit test
           </button>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           {test.questions.map((q, i) => (
-            <Card key={q.question_id} className="border-indigo-100">
+            <Card key={q.question_id} className="border-line-soft">
               <label className="block">
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-ink-faint">
                     Question {i + 1}
                   </span>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-600">
+                  <span className="rounded-full bg-cream px-2.5 py-0.5 text-xs font-semibold text-pen">
                     {q.marks} mark{q.marks !== 1 ? "s" : ""}
                   </span>
                 </div>
-                <p className="text-base font-semibold text-indigo-950 leading-relaxed">{q.prompt}</p>
+                <p className="text-base font-semibold text-ink leading-relaxed">{q.prompt}</p>
                 <textarea
                   required
                   className={`${inputClass} mt-4 min-h-[120px]`}
@@ -66,7 +66,7 @@ export default function TestTakingForm({
             </Card>
           ))}
           <div className="sticky bottom-4 mt-6">
-            <div className="flex gap-3 rounded-2xl border border-indigo-200 bg-white/90 backdrop-blur-sm p-3 shadow-lg shadow-indigo-100">
+            <div className="flex gap-3 rounded-2xl border border-line bg-paper/90 backdrop-blur-sm p-3 shadow-card">
               <button className={`${btnPrimary} flex-1 justify-center py-3`} type="submit" disabled={isBusy}>
                 {isBusy ? "Submitting…" : "Submit test"}
               </button>

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
 import SocialProofCard from "@/components/marketing/SocialProofCard";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
-import { IconSparkle } from "@/components/shared/icons";
 import { getResumeStep, getVault, setVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 import type { OnboardingSampleGrade } from "@/lib/onboarding/types";
@@ -117,49 +116,46 @@ export default function OnboardingResultPage() {
   return (
     <OnboardingShell step={5} backHref="/onboarding/upload" backLabel="Re-upload">
       <div className="text-center">
-        <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-xl shadow-indigo-300/40">
-          <IconSparkle className="h-8 w-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-indigo-950 sm:text-4xl">
-          Sample grade &mdash; your first paper
+        <p className="font-hand text-2xl text-pen">Marked and handed back</p>
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+          Your first graded paper
         </h1>
       </div>
 
       <div className="mt-8 space-y-5">
         {state.kind === "loading" ? (
           <Card className="text-center py-12">
-            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
-            <p className="text-sm font-medium text-indigo-400">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-pen border-t-transparent" />
+            <p className="font-hand text-xl text-ink-soft">
               Reading your student&rsquo;s handwriting&hellip;
             </p>
           </Card>
         ) : null}
 
         {(state.kind === "ready" || state.kind === "soft-fail") ? (
-          <Card>
+          <Card className="animate-rise">
             <div className="flex flex-col items-center text-center">
-              <div className="inline-flex items-baseline gap-1">
-                <span className="text-5xl font-extrabold text-indigo-600">{state.grade.marksEarned}</span>
-                <span className="text-xl font-semibold text-slate-400">/ {state.grade.maxMarks}</span>
-              </div>
+              <p className="font-hand -rotate-3 text-6xl font-bold text-pen">
+                {state.grade.marksEarned}/{state.grade.maxMarks}
+              </p>
               {state.grade.feedback ? (
-                <p className="mt-3 max-w-md text-sm leading-relaxed text-indigo-950">
+                <p className="mt-4 max-w-md font-hand text-2xl leading-snug text-pen-deep">
                   {state.grade.feedback}
                 </p>
               ) : null}
             </div>
 
             {state.grade.ocrAnswerText ? (
-              <div className="mt-5 border-t border-indigo-100 pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">What we read</p>
-                <pre className="mt-1.5 whitespace-pre-wrap rounded-md border border-indigo-100 bg-indigo-50/40 px-3 py-2 text-xs leading-relaxed text-slate-700">
+              <div className="mt-6 border-t border-line pt-4">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-ink-faint">What we read</p>
+                <pre className="mt-2 whitespace-pre-wrap rounded-xl border border-line bg-cream px-3.5 py-2.5 font-sans text-xs leading-relaxed text-ink-soft">
                   {state.grade.ocrAnswerText}
                 </pre>
               </div>
             ) : null}
 
             {state.kind === "soft-fail" ? (
-              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <p className="mt-4 rounded-xl border border-marigold/30 bg-marigold-wash px-3.5 py-2.5 text-xs font-bold text-marigold-deep">
                 We couldn&rsquo;t read the answer clearly. Try a clearer photo for a real grade, or continue anyway.
               </p>
             ) : null}

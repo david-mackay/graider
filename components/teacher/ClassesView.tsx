@@ -98,7 +98,7 @@ export default function TeacherClassesView({
 
       {showCreateClassForm ? (
         <Card>
-          <h3 className="mb-4 text-sm font-semibold text-indigo-950">Create new class</h3>
+          <h3 className="mb-4 text-sm font-semibold text-ink">Create new class</h3>
           <form onSubmit={createClass} className="space-y-3 sm:flex sm:items-end sm:gap-3 sm:space-y-0">
             <div className="flex-1">
               <FormField label="Class name">
@@ -121,11 +121,11 @@ export default function TeacherClassesView({
 
       {classes.length === 0 ? (
         <Card className="text-center py-14">
-          <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50">
-            <IconHome className="h-6 w-6 text-indigo-400" />
+          <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-cream">
+            <IconHome className="h-6 w-6 text-ink-faint" />
           </div>
-          <p className="text-sm font-semibold text-indigo-950">No classes yet</p>
-          <p className="mt-1 text-xs text-slate-400">Create your first class to get started.</p>
+          <p className="text-sm font-semibold text-ink">No classes yet</p>
+          <p className="mt-1 text-xs text-ink-faint">Create your first class to get started.</p>
           <button className={`${btnPrimary} mt-4`} type="button" onClick={() => setShowCreateClassForm(true)}>
             Create a class
           </button>
@@ -136,16 +136,16 @@ export default function TeacherClassesView({
             const classTests = tests.filter((t) => t.class_id === entry.id);
             const gradedCount = attemptsGradedCountByClass.get(entry.id) ?? 0;
             return (
-              <Card key={entry.id} className="hover:border-indigo-200 transition-colors duration-150">
+              <Card key={entry.id} className="hover:border-line transition-colors duration-150">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-indigo-950">{entry.name}</h4>
+                      <h4 className="font-display text-lg font-semibold text-ink">{entry.name}</h4>
                       <Badge variant={entry.role_in_class === "teacher" ? "blue" : "gray"}>
                         {entry.role_in_class ?? "member"}
                       </Badge>
                     </div>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-xs text-ink-faint">
                       {classTests.length} test{classTests.length !== 1 ? "s" : ""}
                       {gradedCount > 0 ? ` · ${gradedCount} graded` : ""}
                     </p>
@@ -158,7 +158,7 @@ export default function TeacherClassesView({
                             setExpandedInviteClassId(next);
                             if (next && !invitesByClass[next]) void loadInvites(next);
                           }}
-                          className="cursor-pointer text-xs font-medium text-indigo-500 hover:text-indigo-700 transition-colors duration-150"
+                          className="cursor-pointer text-xs font-medium text-pen hover:text-pen-deep transition-colors duration-150"
                         >
                           {expandedInviteClassId === entry.id ? "Hide invites" : "Manage invites"}
                         </button>
@@ -189,7 +189,7 @@ export default function TeacherClassesView({
       )}
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-indigo-950">Join a class</h3>
+        <h3 className="mb-3 text-sm font-semibold text-ink">Join a class</h3>
         <form onSubmit={joinClass} className="flex flex-wrap items-end gap-3">
           <FormField label="Invite code">
             <input

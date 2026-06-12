@@ -21,7 +21,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
         href="/t"
         rightSlot={
           <>
-            <span className="hidden sm:inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-600 ring-1 ring-indigo-200/60">
+            <span className="hidden sm:inline-flex items-center rounded-full bg-pen-wash px-2.5 py-0.5 text-xs font-bold text-pen-deep ring-1 ring-pen-soft/60">
               Teacher
             </span>
             <UserButton appearance={{ elements: { avatarBox: "h-8 w-8" } }} />

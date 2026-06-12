@@ -1,13 +1,96 @@
 @import "tailwindcss";
 
+/**
+ * Graider design system — "The Teacher's Desk"
+ *
+ * A warm paper-and-ink palette built around the feeling of marking a stack
+ * of papers by hand: cream paper, dark ink, the red grading pen, and the
+ * green pencil for what's done.
+ */
+/*
+ * Fonts reference next/font variables that live on <body>, so they must be
+ * inlined into the utilities rather than resolved at :root.
+ */
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-hand: var(--font-caveat), "Comic Sans MS", cursive;
+}
+
+@theme {
+  /* Surfaces — paper */
+  --color-paper: #fdfaf1;
+  --color-cream: #f6efe1;
+  --color-cream-deep: #ede3cc;
+
+  /* Ink */
+  --color-ink: #2c231b;
+  --color-ink-soft: #6f6151;
+  --color-ink-faint: #a3927b;
+
+  /* Rules & borders */
+  --color-line: #e5d9c0;
+  --color-line-soft: #efe7d4;
+
+  /* The red pen — primary accent */
+  --color-pen: #be3a2e;
+  --color-pen-deep: #99291f;
+  --color-pen-soft: #e0a89e;
+  --color-pen-wash: #f8e9e3;
+
+  /* Green pencil — graded / correct */
+  --color-moss: #4a7c59;
+  --color-moss-deep: #38613f;
+  --color-moss-wash: #e9f0e4;
+
+  /* Gold — premium accents */
+  --color-gold: #c8a24b;
+  --color-gold-wash: #f5ecd7;
+
+  /* Marigold — needs attention */
+  --color-marigold: #b07a21;
+  --color-marigold-deep: #8f6312;
+  --color-marigold-wash: #f7ecd5;
+
+  /* Warm white (used for text on pen-red surfaces) */
+  --color-white: #fffcf5;
+
+  /* Shadows — warm, brown-tinted */
+  --shadow-paper: 0 1px 2px rgba(62, 44, 37, 0.05), 0 4px 14px rgba(62, 44, 37, 0.07);
+  --shadow-card: 0 10px 24px rgba(62, 44, 37, 0.12);
+  --shadow-lifted: 0 18px 36px rgba(62, 44, 37, 0.18);
+
+  /* Motion */
+  --animate-rise: rise 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  --animate-rise-slow: rise 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 body {
-  background-color: #f5f3ff;
-  color: #1e1b4b;
-  font-family: var(--font-sans, system-ui, sans-serif);
+  background-color: var(--color-cream);
+  background-image: radial-gradient(
+    ellipse 120% 60% at 50% -10%,
+    var(--color-paper) 0%,
+    transparent 65%
+  );
+  background-repeat: no-repeat;
+  color: var(--color-ink);
+  font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background-color: var(--color-pen-wash);
+  color: var(--color-pen-deep);
 }
 
 button,
@@ -15,6 +98,11 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-pen);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

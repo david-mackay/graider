@@ -128,11 +128,11 @@ export default function StepUploadStack({
       <Card>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <div>
-            <h3 className="text-base font-semibold text-indigo-950">{selectedTest.title}</h3>
-            <p className="text-xs text-slate-500">Drop the photos of your stack of papers below.</p>
+            <h3 className="font-display text-lg font-semibold text-ink">{selectedTest.title}</h3>
+            <p className="text-xs text-ink-soft">Drop the photos of your stack of papers below.</p>
           </div>
-          <span className="text-xs text-slate-400">
-            {staged.length} / {MAX_IMAGES} images
+          <span className="text-xs font-bold text-ink-faint">
+            {staged.length} / {MAX_IMAGES} pages
           </span>
         </div>
 
@@ -152,15 +152,15 @@ export default function StepUploadStack({
           }}
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors duration-150 ${
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors duration-150 ${
             dragActive
-              ? "border-indigo-400 bg-indigo-50"
-              : "border-indigo-200 bg-indigo-50/30 hover:border-indigo-300 hover:bg-indigo-50/60"
+              ? "border-pen bg-pen-wash"
+              : "border-line bg-cream/60 hover:border-ink-faint hover:bg-cream"
           }`}
         >
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-paper shadow-paper">
             <svg
-              className="h-6 w-6 text-indigo-500"
+              className="h-6 w-6 text-pen"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -174,10 +174,10 @@ export default function StepUploadStack({
               />
             </svg>
           </div>
-          <p className="text-sm font-semibold text-indigo-950">
-            Drag and drop, or click to choose
+          <p className="text-sm font-bold text-ink">
+            Drag the whole stack in, or click to choose
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-ink-soft">
             JPG or PNG. Up to {MAX_IMAGES} pages per stack.
           </p>
           <input
@@ -197,7 +197,7 @@ export default function StepUploadStack({
         {combinedError ? (
           <div
             role="alert"
-            className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            className="mt-3 rounded-xl border border-pen-soft/60 bg-pen-wash px-3.5 py-2.5 text-sm font-bold text-pen-deep"
           >
             {combinedError}
           </div>
@@ -206,13 +206,13 @@ export default function StepUploadStack({
         {staged.length > 0 ? (
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400">
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
                 Pages ready ({staged.length})
               </p>
               <button
                 type="button"
                 onClick={clearAll}
-                className="cursor-pointer text-xs font-medium text-slate-500 hover:text-indigo-700 transition-colors duration-150"
+                className="cursor-pointer text-xs font-bold text-ink-soft hover:text-pen transition-colors duration-150"
                 disabled={isBusy}
               >
                 Clear all
@@ -222,7 +222,7 @@ export default function StepUploadStack({
               {staged.map((item, index) => (
                 <li
                   key={item.id}
-                  className="group relative overflow-hidden rounded-lg border border-indigo-100 bg-white"
+                  className="group relative overflow-hidden rounded-lg border border-line bg-paper shadow-paper"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -238,7 +238,7 @@ export default function StepUploadStack({
                       type="button"
                       onClick={() => removeStaged(item.id)}
                       disabled={isBusy}
-                      className="cursor-pointer rounded-full bg-white/90 p-1 text-slate-700 transition-colors duration-150 hover:bg-white"
+                      className="cursor-pointer rounded-full bg-paper/90 p-1 text-ink transition-colors duration-150 hover:bg-paper"
                       aria-label={`Remove page ${index + 1}`}
                     >
                       <IconX className="h-3 w-3" />
@@ -266,7 +266,7 @@ export default function StepUploadStack({
           disabled={submitDisabled}
           className={btnPrimary}
         >
-          {isBusy ? "Reading pages…" : "Continue to review"}
+          {isBusy ? "Reading handwriting…" : "Continue to review"}
         </button>
       </div>
     </div>

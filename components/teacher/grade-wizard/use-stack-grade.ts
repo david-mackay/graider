@@ -26,6 +26,8 @@ export type UseStackGradeReturn = {
   state: WizardState;
   selectedTest: TestSummary | null;
   preview: StackPreview | null;
+  /** The uploaded page photos, in pageIndex order. */
+  pageFiles: File[];
   assignments: AssignmentMap;
   results: StackCommitResult | null;
   errorMessage: string;
@@ -59,6 +61,7 @@ export function useStackGrade(): UseStackGradeReturn {
   const [state, setState] = useState<WizardState>("pickTest");
   const [selectedTest, setSelectedTest] = useState<TestSummary | null>(null);
   const [preview, setPreview] = useState<StackPreview | null>(null);
+  const [pageFiles, setPageFiles] = useState<File[]>([]);
   const [assignments, setAssignments] = useState<AssignmentMap>({});
   const [results, setResults] = useState<StackCommitResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -68,6 +71,7 @@ export function useStackGrade(): UseStackGradeReturn {
   const selectTest = useCallback((test: TestSummary) => {
     setSelectedTest(test);
     setPreview(null);
+    setPageFiles([]);
     setAssignments({});
     setResults(null);
     setErrorMessage("");
@@ -103,6 +107,7 @@ export function useStackGrade(): UseStackGradeReturn {
 
         const nextPreview: StackPreview = { pages: payload.pages };
         setPreview(nextPreview);
+        setPageFiles(files);
         setAssignments(buildInitialAssignments(nextPreview));
         setState("reviewing");
       } catch (error) {
@@ -182,6 +187,7 @@ export function useStackGrade(): UseStackGradeReturn {
   const restart = useCallback(() => {
     setSelectedTest(null);
     setPreview(null);
+    setPageFiles([]);
     setAssignments({});
     setResults(null);
     setErrorMessage("");
@@ -207,6 +213,7 @@ export function useStackGrade(): UseStackGradeReturn {
     state,
     selectedTest,
     preview,
+    pageFiles,
     assignments,
     results,
     errorMessage,

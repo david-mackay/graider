@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
+import { IconX } from "@/components/shared/icons";
 import RosterPicker from "@/components/teacher/grade-wizard/RosterPicker";
 import {
   SKIP_VALUE,
@@ -12,6 +13,8 @@ import type { RosterEntry, StackPagePreview } from "@/lib/types";
 
 type StepReviewMatchesProps = {
   pages: StackPagePreview[];
+  /** Object URLs of the uploaded page photos, indexed by pageIndex. */
+  pageImageUrls: string[];
   roster: RosterEntry[];
   assignments: AssignmentMap;
   onAssignmentChange: (pageIndex: number, value: AssignmentValue) => void;
@@ -40,6 +43,7 @@ function statusBadge(status: StackPagePreview["status"], confidence: number) {
 
 export default function StepReviewMatches({
   pages,
+  pageImageUrls,
   roster,
   assignments,
   onAssignmentChange,
@@ -49,6 +53,16 @@ export default function StepReviewMatches({
   errorMessage,
 }: StepReviewMatchesProps) {
   const [expandedAnswers, setExpandedAnswers] = useState<Set<number>>(new Set());
+  const [lightbox, setLightbox] = useState<{ url: string; page: number } | null>(null);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setLightbox(null);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [lightbox]);
 
   const sortedPages = useMemo(() => {
     return [...pages].sort((a, b) => {
@@ -87,31 +101,31 @@ export default function StepReviewMatches({
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-indigo-950">Review matches</h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <h3 className="font-display text-lg font-semibold text-ink">Whose paper is whose?</h3>
+            <p className="mt-1 text-sm text-ink-soft">
               Confirm which student each page belongs to. Pages we couldn&apos;t auto-match are at the top.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span className="font-semibold text-indigo-700">{counts.toGrade}</span> to grade
-            <span className="text-slate-300">·</span>
-            <span className="font-semibold text-slate-600">{counts.skipped}</span> skipped
+          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+            <span className="font-bold text-pen-deep">{counts.toGrade}</span> to grade
+            <span className="text-line">·</span>
+            <span className="font-bold text-ink-soft">{counts.skipped}</span> skipped
             {counts.needsAssignment > 0 ? (
               <>
-                <span className="text-slate-300">·</span>
-                <span className="font-semibold text-amber-700">{counts.needsAssignment}</span> need a student
+                <span className="text-line">·</span>
+                <span className="font-bold text-marigold-deep">{counts.needsAssignment}</span> need a student
               </>
             ) : null}
           </div>
         </div>
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-ink-faint">
           Re-grading existing attempts will overwrite previous answers.
         </p>
       </Card>
 
       {errorMessage ? (
-        <Card className="border-red-200 bg-red-50">
-          <p className="text-sm font-medium text-red-700">{errorMessage}</p>
+        <Card className="border-pen-soft/60 bg-pen-wash">
+          <p className="text-sm font-bold text-pen-deep">{errorMessage}</p>
         </Card>
       ) : null}
 
@@ -120,46 +134,63 @@ export default function StepReviewMatches({
           const isUnmatched = page.status === "unmatched";
           const value: AssignmentValue = (assignments[page.pageIndex] ?? "") as AssignmentValue;
           const isAnswersOpen = expandedAnswers.has(page.pageIndex);
+          const imageUrl = pageImageUrls[page.pageIndex];
 
           return (
             <li key={page.pageIndex}>
               <div
-                className={`rounded-xl border p-4 transition-colors duration-150 ${
+                className={`rounded-2xl border p-4 shadow-paper transition-colors duration-150 ${
                   isUnmatched
-                    ? "border-red-200 bg-red-50"
-                    : "border-indigo-100 bg-white"
+                    ? "border-marigold/40 bg-marigold-wash/50"
+                    : "border-line bg-paper"
                 }`}
               >
                 <div className="flex flex-col gap-4 md:flex-row">
                   <div className="flex w-full items-start gap-3 md:w-72 md:flex-shrink-0">
-                    <div
-                      aria-hidden="true"
-                      className="flex h-16 w-12 flex-shrink-0 items-center justify-center rounded-md border border-indigo-100 bg-indigo-50/60"
-                    >
-                      <svg
-                        className="h-6 w-6 text-indigo-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={1.6}
+                    {imageUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setLightbox({ url: imageUrl, page: page.pageIndex + 1 })}
+                        className="group relative h-24 w-[4.5rem] flex-shrink-0 cursor-zoom-in overflow-hidden rounded-md border border-line bg-cream shadow-paper"
+                        aria-label={`View page ${page.pageIndex + 1} photo`}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m4.5 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imageUrl}
+                          alt={`Page ${page.pageIndex + 1}`}
+                          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
                         />
-                      </svg>
-                    </div>
+                      </button>
+                    ) : (
+                      <div
+                        aria-hidden="true"
+                        className="flex h-24 w-[4.5rem] flex-shrink-0 items-center justify-center rounded-md border border-line bg-cream"
+                      >
+                        <svg
+                          className="h-6 w-6 text-ink-faint"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={1.6}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m4.5 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                          />
+                        </svg>
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-indigo-950">
+                      <p className="font-display text-sm font-semibold text-ink">
                         Page {page.pageIndex + 1}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500 truncate">
-                        OCR read:{" "}
-                        <span className="font-medium text-slate-700">
+                      <p className="mt-0.5 text-xs text-ink-soft truncate">
+                        Name on paper:{" "}
+                        <span className="font-hand text-base text-ink">
                           {page.studentNameGuess
                             ? `“${page.studentNameGuess}”`
-                            : "no name detected"}
+                            : "none found"}
                         </span>
                       </p>
                       <div className="mt-2">{statusBadge(page.status, page.confidence)}</div>
@@ -169,7 +200,7 @@ export default function StepReviewMatches({
                   <div className="flex-1">
                     <label
                       htmlFor={`roster-${page.pageIndex}`}
-                      className="text-xs font-semibold uppercase tracking-wide text-indigo-400"
+                      className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint"
                     >
                       Assign to student
                     </label>
@@ -188,23 +219,23 @@ export default function StepReviewMatches({
                         <button
                           type="button"
                           onClick={() => toggleAnswers(page.pageIndex)}
-                          className="cursor-pointer text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors duration-150"
+                          className="cursor-pointer text-xs font-bold text-pen hover:text-pen-deep transition-colors duration-150"
                           aria-expanded={isAnswersOpen}
                         >
                           {isAnswersOpen ? "Hide" : "Show"} extracted answers ({page.ocrAnswers.length})
                         </button>
                         {isAnswersOpen ? (
-                          <ul className="mt-2 space-y-1.5 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-xs">
+                          <ul className="mt-2 space-y-1.5 rounded-xl border border-line bg-cream p-3 text-xs">
                             {page.ocrAnswers.map((answer, idx) => (
-                              <li key={idx} className="text-slate-700">
-                                <span className="font-semibold text-indigo-700">
+                              <li key={idx} className="text-ink-soft">
+                                <span className="font-bold text-pen-deep">
                                   Q{answer.question_index != null ? answer.question_index + 1 : idx + 1}:
                                 </span>{" "}
-                                <span className="font-medium text-slate-800">
+                                <span className="font-bold text-ink">
                                   {answer.question}
                                 </span>
-                                <div className="mt-0.5 text-slate-600">
-                                  {answer.answer || <span className="italic text-slate-400">no answer</span>}
+                                <div className="mt-0.5 text-ink-soft">
+                                  {answer.answer || <span className="italic text-ink-faint">no answer</span>}
                                 </div>
                               </li>
                             ))}
@@ -212,7 +243,7 @@ export default function StepReviewMatches({
                         ) : null}
                       </div>
                     ) : (
-                      <p className="mt-3 text-xs italic text-slate-400">
+                      <p className="mt-3 text-xs italic text-ink-faint">
                         No answers were extracted from this page.
                       </p>
                     )}
@@ -234,9 +265,36 @@ export default function StepReviewMatches({
           disabled={confirmDisabled}
           className={btnPrimary}
         >
-          {isBusy ? "Grading…" : `Grade all (${counts.toGrade})`}
+          {isBusy ? "Marking…" : `Grade all (${counts.toGrade})`}
         </button>
       </div>
+
+      {lightbox ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Page ${lightbox.page} photo`}
+          onClick={() => setLightbox(null)}
+        >
+          <div className="relative max-h-full" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightbox.url}
+              alt={`Page ${lightbox.page}`}
+              className="max-h-[85vh] max-w-full rounded-lg border border-line bg-paper shadow-lifted"
+            />
+            <button
+              type="button"
+              onClick={() => setLightbox(null)}
+              className="absolute -right-3 -top-3 cursor-pointer rounded-full bg-paper p-2 text-ink shadow-card transition-transform duration-150 hover:scale-105"
+              aria-label="Close preview"
+            >
+              <IconX className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

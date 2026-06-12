@@ -8,7 +8,6 @@ import {
   btnPrimary,
   inputClass,
 } from "@/components/shared/ui";
-import { IconClipboard } from "@/components/shared/icons";
 import { getVault, setVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 
@@ -69,14 +68,12 @@ export default function OnboardingAnswerKeyPage() {
   return (
     <OnboardingShell step={3} backHref="/onboarding/capabilities">
       <div className="text-center">
-        <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-xl shadow-indigo-300/40">
-          <IconClipboard className="h-8 w-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-indigo-950 sm:text-4xl">
+        <p className="font-hand text-2xl text-pen">Step one</p>
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           First, give me the answer key for one question.
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-slate-500">
-          This is what AI will grade against. The more specific, the better.
+        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
+          This is what the red pen grades against. The more specific, the better.
         </p>
       </div>
 
@@ -128,7 +125,7 @@ export default function OnboardingAnswerKeyPage() {
         {error ? (
           <p
             role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            className="rounded-xl border border-pen-soft/60 bg-pen-wash px-3.5 py-2.5 text-sm font-bold text-pen-deep"
           >
             {error}
           </p>

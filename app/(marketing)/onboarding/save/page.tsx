@@ -5,7 +5,6 @@ import { SignInButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
 import { Card } from "@/components/shared/ui";
-import { IconSparkle } from "@/components/shared/icons";
 import { getResumeStep, getVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 import type { OnboardingSampleGrade } from "@/lib/onboarding/types";
@@ -36,7 +35,7 @@ export default function OnboardingSavePage() {
     return (
       <OnboardingShell step={6} backHref="/onboarding/result">
         <div className="flex justify-center py-12">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-pen border-t-transparent" />
         </div>
       </OnboardingShell>
     );
@@ -45,33 +44,30 @@ export default function OnboardingSavePage() {
   return (
     <OnboardingShell step={6} backHref="/onboarding/result">
       <div className="text-center">
-        <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-xl shadow-indigo-300/40">
-          <IconSparkle className="h-8 w-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-indigo-950 sm:text-4xl">
+        <p className="font-hand text-2xl text-pen">One last thing</p>
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           Save your first graded test
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-slate-500">
+        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
           Don&rsquo;t lose this &mdash; sign up to keep your progress and start grading real stacks.
         </p>
       </div>
 
       <div className="mt-8 space-y-4">
-        <Card className="border-indigo-200">
-          <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">
+        <Card>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-ink-faint">
             Your sample grade
           </p>
           <div className="mt-3 flex items-center justify-between gap-4">
-            <div className="inline-flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold text-indigo-600">{grade.marksEarned}</span>
-              <span className="text-lg font-semibold text-slate-400">/ {grade.maxMarks}</span>
-            </div>
-            <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+            <p className="font-hand -rotate-2 text-4xl font-bold text-pen">
+              {grade.marksEarned}/{grade.maxMarks}
+            </p>
+            <span className="rounded-full bg-moss-wash px-2.5 py-0.5 text-xs font-bold text-moss-deep ring-1 ring-moss/30">
               Graded
             </span>
           </div>
           {grade.feedback ? (
-            <p className="mt-3 text-sm leading-relaxed text-indigo-950">{grade.feedback}</p>
+            <p className="mt-3 font-hand text-xl leading-snug text-pen-deep">{grade.feedback}</p>
           ) : null}
         </Card>
 
@@ -80,18 +76,18 @@ export default function OnboardingSavePage() {
             <button
               type="button"
               onClick={() => fireEvent(ONBOARDING_EVENTS.AUTH_STARTED)}
-              className="cursor-pointer w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 hover:from-indigo-700 hover:to-violet-700 transition-all duration-200"
+              className="w-full cursor-pointer rounded-full bg-pen px-8 py-3.5 text-base font-bold text-white shadow-lifted transition-all duration-150 hover:bg-pen-deep active:scale-[0.98]"
             >
               Save my progress &mdash; sign up free
             </button>
           </SignInButton>
-          <p className="mt-3 text-center text-xs text-slate-400">
+          <p className="mt-3 text-center text-xs text-ink-faint">
             Already have an account?{" "}
             <SignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
               <button
                 type="button"
                 onClick={() => fireEvent(ONBOARDING_EVENTS.AUTH_STARTED)}
-                className="cursor-pointer font-semibold text-indigo-600 hover:text-indigo-700"
+                className="cursor-pointer font-bold text-pen hover:text-pen-deep"
               >
                 Sign in
               </button>

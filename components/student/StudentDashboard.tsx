@@ -235,8 +235,8 @@ export default function StudentDashboard() {
     return (
       <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
-          <p className="text-sm font-medium text-indigo-400">Loading your workspace…</p>
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-pen border-t-transparent" />
+          <p className="font-hand text-xl text-ink-soft">Opening your backpack…</p>
         </div>
       </div>
     );
@@ -272,17 +272,17 @@ export default function StudentDashboard() {
       )}
 
       <aside
-        className={`fixed inset-y-14 left-0 z-40 w-64 bg-white border-r border-indigo-100 transform transition-transform duration-200 lg:hidden ${
+        className={`fixed inset-y-14 left-0 z-40 w-64 bg-paper border-r border-line-soft transform transition-transform duration-200 lg:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Sidebar navigation"
       >
-        <div className="flex items-center justify-between p-4 border-b border-indigo-100/60">
-          <p className="text-sm font-semibold text-indigo-950">Menu</p>
+        <div className="flex items-center justify-between p-4 border-b border-line-soft">
+          <p className="text-sm font-semibold text-ink">Menu</p>
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            className="cursor-pointer rounded-lg p-1 text-slate-500 hover:bg-indigo-50 transition-colors duration-150"
+            className="cursor-pointer rounded-lg p-1 text-ink-soft hover:bg-cream transition-colors duration-150"
             aria-label="Close menu"
           >
             <IconX className="h-5 w-5" />
@@ -298,7 +298,7 @@ export default function StudentDashboard() {
         />
       </aside>
 
-      <aside className="hidden lg:flex lg:w-60 xl:w-64 flex-col bg-white border-r border-indigo-100 flex-shrink-0">
+      <aside className="hidden lg:flex lg:w-60 xl:w-64 flex-col bg-paper border-r border-line-soft flex-shrink-0">
         <StudentSidebar
           classes={classes}
           selectedClassId={selectedClassId}
@@ -310,17 +310,17 @@ export default function StudentDashboard() {
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-indigo-100 bg-white px-4 py-3 lg:hidden">
+        <div className="flex items-center gap-3 border-b border-line-soft bg-paper px-4 py-3 lg:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="cursor-pointer rounded-lg p-1.5 text-slate-500 hover:bg-indigo-50 transition-colors duration-150"
+            className="cursor-pointer rounded-lg p-1.5 text-ink-soft hover:bg-cream transition-colors duration-150"
             aria-label="Open menu"
           >
             <IconMenu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-indigo-950">
+            <span className="text-sm font-semibold text-ink">
               {activeView === "classes" ? "My Classes" : "My Tests"}
             </span>
             {activeClass && selectedClassId !== ALL_CLASSES_VALUE ? (
@@ -366,7 +366,7 @@ export default function StudentDashboard() {
 
             {activeView === "tests" ? (
               <div className="space-y-6">
-                <h2 className="text-xl font-bold text-indigo-950">My Tests</h2>
+                <h2 className="text-xl font-bold text-ink">My Tests</h2>
                 {selectedAttemptDetail ? (
                   <AttemptDetailCard attempt={selectedAttemptDetail} onClose={() => setSelectedAttemptDetail(null)} />
                 ) : null}

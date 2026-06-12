@@ -18,7 +18,7 @@ export default function OnboardingShell({
   children,
 }: OnboardingShellProps) {
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-b from-indigo-50/60 via-white to-violet-50/30">
+    <div className="min-h-[calc(100vh-3.5rem)]">
       <div className="mx-auto w-full max-w-xl px-4 pt-8 pb-20 sm:pt-12">
         <ProgressDots current={step} />
 
@@ -26,7 +26,7 @@ export default function OnboardingShell({
           <div className="mt-6">
             <Link
               href={backHref}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors duration-150"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-ink-soft hover:text-pen transition-colors duration-150"
             >
               <svg
                 className="h-4 w-4"
@@ -47,7 +47,7 @@ export default function OnboardingShell({
           </div>
         ) : null}
 
-        <div className="mt-6 sm:mt-10">{children}</div>
+        <div className="mt-6 animate-rise sm:mt-10">{children}</div>
       </div>
     </div>
   );
@@ -72,10 +72,10 @@ function ProgressDots({ current }: { current: number }) {
             key={stepNumber}
             className={
               isCurrent
-                ? "h-2 w-8 rounded-full bg-indigo-600 transition-all duration-200"
+                ? "h-2 w-8 rounded-full bg-pen transition-all duration-250"
                 : isCompleted
-                  ? "h-2 w-2 rounded-full bg-indigo-600/80 transition-all duration-200"
-                  : "h-2 w-2 rounded-full bg-indigo-200 transition-all duration-200"
+                  ? "h-2 w-2 rounded-full bg-pen/70 transition-all duration-250"
+                  : "h-2 w-2 rounded-full bg-line transition-all duration-250"
             }
             aria-hidden="true"
           />

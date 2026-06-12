@@ -3,30 +3,32 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
+import { Wordmark } from "@/components/shared/Brand";
 import { Card } from "@/components/shared/ui";
-import { IconSparkle } from "@/components/shared/icons";
+import { IconCamera, IconPen, IconStack } from "@/components/shared/icons";
+
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 
 type Capability = {
-  emoji: string;
+  Icon: (props: { className?: string }) => React.ReactNode;
   verb: string;
   example: string;
 };
 
 const CAPABILITIES: Capability[] = [
   {
-    emoji: "📸",
+    Icon: IconCamera,
     verb: "Scan",
     example: "Snap a photo of Maya's handwritten test.",
   },
   {
-    emoji: "⚡",
+    Icon: IconPen,
     verb: "Grade",
     example:
       "AI compares her answer to your key — 7/10, 'Missed the second mitochondria function.'",
   },
   {
-    emoji: "📊",
+    Icon: IconStack,
     verb: "Review",
     example: "See exactly where the class struggled before next lesson.",
   },
@@ -40,17 +42,10 @@ export default function OnboardingCapabilitiesPage() {
   return (
     <OnboardingShell step={2} backHref="/onboarding/hook">
       <div className="text-center">
-        <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-xl shadow-indigo-300/40">
-          <IconSparkle className="h-8 w-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-indigo-950 sm:text-4xl">
-          That&rsquo;s where{" "}
-          <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-            gr<span className="font-black">AI</span>der
-          </span>{" "}
-          comes in.
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+          That&rsquo;s where <Wordmark className="text-[1em]" /> comes in.
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-slate-500">
+        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
           Three things it does in the background while you teach.
         </p>
       </div>
@@ -58,19 +53,19 @@ export default function OnboardingCapabilitiesPage() {
       <ul className="mt-8 space-y-4">
         {CAPABILITIES.map((cap) => (
           <li key={cap.verb}>
-            <Card className="hover:border-indigo-200 transition-colors duration-150">
+            <Card className="transition-colors duration-150 hover:border-ink-faint/50">
               <div className="flex items-start gap-4">
                 <span
-                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-2xl"
+                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-pen-wash"
                   aria-hidden="true"
                 >
-                  {cap.emoji}
+                  <cap.Icon className="h-6 w-6 text-pen" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-base font-semibold text-indigo-950">
+                  <p className="font-display text-lg font-semibold text-ink">
                     {cap.verb}
                   </p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                  <p className="mt-1 text-sm leading-relaxed text-ink-soft">
                     {cap.example}
                   </p>
                 </div>
@@ -83,11 +78,11 @@ export default function OnboardingCapabilitiesPage() {
       <div className="mt-10 text-center">
         <Link
           href="/onboarding/answer-key"
-          className="cursor-pointer inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 hover:from-indigo-700 hover:to-violet-700 transition-all duration-200"
+          className="inline-flex cursor-pointer items-center justify-center rounded-full bg-pen px-8 py-3.5 text-base font-bold text-white shadow-lifted transition-all duration-150 hover:bg-pen-deep active:scale-[0.97]"
         >
           Try it on one paper
         </Link>
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-ink-faint">
           No sign up &mdash; we&rsquo;ll grade a single paper for you.
         </p>
       </div>

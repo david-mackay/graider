@@ -32,10 +32,10 @@ export default function StudentSidebar({
     <div className="flex flex-col h-full">
       {/* Class selector — students see their enrolled classes */}
       {classes.length > 1 ? (
-        <div className="p-4 border-b border-indigo-100/60">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-300">Active class</p>
+        <div className="p-4 border-b border-line-soft">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">Active class</p>
           <select
-            className="w-full cursor-pointer rounded-lg border border-indigo-200 bg-indigo-50/40 px-3 py-2 text-sm text-indigo-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-colors duration-150"
+            className="w-full cursor-pointer rounded-lg border border-line bg-cream px-3 py-2 text-sm text-ink outline-none focus:border-pen/50 focus:ring-2 focus:ring-pen-wash transition-colors duration-150"
             value={selectedClassId}
             onChange={(e) => onSelectClass(e.target.value)}
           >
@@ -57,11 +57,11 @@ export default function StudentSidebar({
               key={item.id}
               type="button"
               onClick={() => onNavigate(item.id)}
-              className={`cursor-pointer w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
-                isActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-indigo-50/50 hover:text-indigo-700"
+              className={`cursor-pointer w-full flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-bold transition-colors duration-150 ${
+                isActive ? "bg-pen-wash text-pen-deep" : "text-ink-soft hover:bg-cream hover:text-ink"
               }`}
             >
-              <item.Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-indigo-600" : "text-slate-400"}`} />
+              <item.Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-pen" : "text-ink-faint"}`} />
               {item.label}
             </button>
           );
@@ -69,14 +69,14 @@ export default function StudentSidebar({
       </nav>
 
       {profileName ? (
-        <div className="p-4 border-t border-indigo-100/60">
+        <div className="p-4 border-t border-line-soft">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-cream-deep text-xs font-bold text-pen">
               {profileName.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-indigo-950">{profileName}</p>
-              <p className="text-xs text-slate-400">Student</p>
+              <p className="truncate text-sm font-semibold text-ink">{profileName}</p>
+              <p className="text-xs text-ink-faint">Student</p>
             </div>
           </div>
         </div>

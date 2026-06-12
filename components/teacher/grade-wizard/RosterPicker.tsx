@@ -255,11 +255,11 @@ export default function RosterPicker({
   }
 
   const triggerClass = [
-    "w-full flex items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-left text-sm outline-none transition-colors duration-150",
+    "w-full flex items-center justify-between gap-2 rounded-lg border bg-paper px-3 py-2 text-left text-sm outline-none transition-colors duration-150",
     disabled
-      ? "cursor-not-allowed opacity-60 border-indigo-100 text-slate-400"
-      : "cursor-pointer border-indigo-200 text-indigo-950 hover:border-indigo-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100",
-    isPlaceholder && !disabled ? "text-slate-400" : "",
+      ? "cursor-not-allowed opacity-60 border-line-soft text-ink-faint"
+      : "cursor-pointer border-line text-ink hover:border-ink-faint focus:border-pen/50 focus:ring-2 focus:ring-pen-wash",
+    isPlaceholder && !disabled ? "text-ink-faint" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -288,7 +288,7 @@ export default function RosterPicker({
         <span className="truncate">{triggerLabel}</span>
         <svg
           aria-hidden="true"
-          className={`h-4 w-4 flex-shrink-0 text-indigo-400 transition-transform duration-150 ${
+          className={`h-4 w-4 flex-shrink-0 text-ink-faint transition-transform duration-150 ${
             open ? "rotate-180" : ""
           }`}
           viewBox="0 0 20 20"
@@ -305,9 +305,9 @@ export default function RosterPicker({
       {open ? (
         <div
           ref={panelRef}
-          className="absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded-lg border border-indigo-100 bg-white shadow-lg"
+          className="absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded-lg border border-line-soft bg-paper shadow-lg"
         >
-          <div className="border-b border-indigo-50 p-2">
+          <div className="border-b border-line-soft p-2">
             <label htmlFor={searchInputId} className="sr-only">
               Search students
             </label>
@@ -332,16 +332,16 @@ export default function RosterPicker({
                   ? `${listboxId}-opt-${safeHighlightIndex}`
                   : undefined
               }
-              className="w-full rounded-md border border-indigo-200 bg-white px-2.5 py-1.5 text-sm text-indigo-950 placeholder-slate-400 outline-none transition-colors duration-150 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-md border border-line bg-paper px-2.5 py-1.5 text-sm text-ink placeholder-ink-faint outline-none transition-colors duration-150 focus:border-pen/50 focus:ring-2 focus:ring-pen-wash"
             />
           </div>
 
           {showEmptyRosterMessage ? (
-            <div className="border-b border-indigo-50 px-3 py-2 text-xs text-slate-500">
+            <div className="border-b border-line-soft px-3 py-2 text-xs text-ink-soft">
               This class has no students;{" "}
               <Link
                 href="/t"
-                className="font-medium text-indigo-600 underline hover:text-indigo-800"
+                className="font-medium text-pen underline hover:text-pen-deep"
                 onClick={() => closePanel({ restoreFocus: false })}
               >
                 invite someone first
@@ -358,7 +358,7 @@ export default function RosterPicker({
             className="max-h-[20rem] overflow-y-auto py-1"
           >
             {filteredOptions.length === 0 ? (
-              <li className="px-3 py-2 text-xs italic text-slate-400">
+              <li className="px-3 py-2 text-xs italic text-ink-faint">
                 No matches.
               </li>
             ) : (
@@ -380,16 +380,16 @@ export default function RosterPicker({
                     onClick={() => commitSelection(option)}
                     className={[
                       "flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm transition-colors duration-100",
-                      isHighlighted ? "bg-indigo-50" : "bg-white",
+                      isHighlighted ? "bg-cream" : "bg-paper",
                       option.isSkip
-                        ? "border-b border-indigo-50 font-medium text-slate-600"
-                        : "text-indigo-950",
+                        ? "border-b border-line-soft font-medium text-ink-soft"
+                        : "text-ink",
                     ].join(" ")}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate">{option.label}</div>
                       {option.sublabel ? (
-                        <div className="truncate text-xs text-slate-400">
+                        <div className="truncate text-xs text-ink-faint">
                           {option.sublabel}
                         </div>
                       ) : null}
@@ -397,7 +397,7 @@ export default function RosterPicker({
                     {isSelected ? (
                       <svg
                         aria-hidden="true"
-                        className="h-4 w-4 flex-shrink-0 text-indigo-600"
+                        className="h-4 w-4 flex-shrink-0 text-pen"
                         viewBox="0 0 20 20"
                         fill="currentColor"
                       >
