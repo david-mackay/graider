@@ -161,11 +161,11 @@ export default function QuestionsView({
 
       {!classCanManage ? (
         <Card className="text-center py-10">
-          <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
-            <IconBook className="h-5 w-5 text-indigo-400" />
+          <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cream">
+            <IconBook className="h-5 w-5 text-ink-faint" />
           </div>
-          <p className="text-sm font-semibold text-indigo-950">{!classId ? "No class selected" : "Access restricted"}</p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="text-sm font-semibold text-ink">{!classId ? "No class selected" : "Access restricted"}</p>
+          <p className="mt-1 text-xs text-ink-faint">
             {!classId
               ? "Open a class from the Classes tab to manage its questions."
               : "You need to be a teacher of this class to manage questions."}
@@ -179,8 +179,8 @@ export default function QuestionsView({
       ) : (
         <>
           {showAddForm ? (
-            <Card className="border-indigo-300">
-              <h3 className="mb-4 text-sm font-semibold text-indigo-950">New question</h3>
+            <Card className="border-ink-faint">
+              <h3 className="mb-4 text-sm font-semibold text-ink">New question</h3>
               <form onSubmit={createQuestion} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField label="Topic" hint="Groups questions by subject area (e.g. Cell Biology)">
@@ -226,7 +226,7 @@ export default function QuestionsView({
                 type="button"
                 onClick={() => setTopicFilter(null)}
                 className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
-                  topicFilter === null ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                  topicFilter === null ? "bg-pen text-white" : "bg-cream text-pen hover:bg-cream-deep"
                 }`}
               >
                 All topics
@@ -237,7 +237,7 @@ export default function QuestionsView({
                   type="button"
                   onClick={() => setTopicFilter(g.topic === topicFilter ? null : g.topic)}
                   className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
-                    topicFilter === g.topic ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                    topicFilter === g.topic ? "bg-pen text-white" : "bg-cream text-pen hover:bg-cream-deep"
                   }`}
                 >
                   {g.topic} <span className="opacity-60">{g.items.length}</span>
@@ -248,28 +248,28 @@ export default function QuestionsView({
 
           {questions.length === 0 ? (
             <Card className="text-center py-10">
-              <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
-                <IconBook className="h-5 w-5 text-indigo-400" />
+              <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cream">
+                <IconBook className="h-5 w-5 text-ink-faint" />
               </div>
-              <p className="text-sm font-semibold text-indigo-950">No questions yet</p>
-              <p className="mt-1 text-xs text-slate-400">Click “+ Add question” above to build your question bank.</p>
+              <p className="text-sm font-semibold text-ink">No questions yet</p>
+              <p className="mt-1 text-xs text-ink-faint">Click “+ Add question” above to build your question bank.</p>
             </Card>
           ) : (
             <div className="space-y-4">
               {filteredGroups.map((group) => (
                 <div key={group.topic}>
-                  <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-400">
-                    <span className="flex-1 border-t border-indigo-100" />
+                  <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                    <span className="flex-1 border-t border-line-soft" />
                     {group.topic}
-                    <span className="text-indigo-200 font-normal normal-case tracking-normal">{group.items.length}</span>
-                    <span className="flex-1 border-t border-indigo-100" />
+                    <span className="text-line font-normal normal-case tracking-normal">{group.items.length}</span>
+                    <span className="flex-1 border-t border-line-soft" />
                   </h3>
                   <div className="space-y-2">
                     {group.items.map((q) => (
-                      <Card key={q.id} className="group hover:border-indigo-200 transition-colors duration-150">
+                      <Card key={q.id} className="group hover:border-line transition-colors duration-150">
                         {editId === q.id ? (
                           <form onSubmit={saveEdit} className="space-y-3">
-                            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Editing question</p>
+                            <p className="text-xs font-semibold text-pen uppercase tracking-wide">Editing question</p>
                             <div className="grid gap-3 sm:grid-cols-2">
                               <FormField label="Topic">
                                 <input className={inputClass} value={editTopic} onChange={(e) => setEditTopic(e.target.value)} placeholder="Topic" />
@@ -292,8 +292,8 @@ export default function QuestionsView({
                         ) : (
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-indigo-950 leading-snug">{q.prompt}</p>
-                              <p className="mt-1.5 text-xs text-slate-400">Answer key: <span className="italic">{q.correct_answer}</span></p>
+                              <p className="text-sm font-medium text-ink leading-snug">{q.prompt}</p>
+                              <p className="mt-1.5 text-xs text-ink-faint">Answer key: <span className="italic">{q.correct_answer}</span></p>
                             </div>
                             <div className="flex flex-shrink-0 items-center gap-2">
                               <Badge variant="gray">{q.marks} mark{q.marks !== 1 ? "s" : ""}</Badge>

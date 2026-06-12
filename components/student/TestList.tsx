@@ -15,11 +15,11 @@ export default function TestList({ rows, classNameById, onStart, onViewResult }:
   if (rows.length === 0) {
     return (
       <Card className="text-center py-12">
-        <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50">
-          <IconClipboard className="h-6 w-6 text-indigo-400" />
+        <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-cream">
+          <IconClipboard className="h-6 w-6 text-ink-faint" />
         </div>
-        <p className="text-sm font-semibold text-indigo-950">No tests yet</p>
-        <p className="mt-1 text-xs text-slate-400">Your teacher hasn{"’"}t assigned any tests yet.</p>
+        <p className="text-sm font-semibold text-ink">No tests yet</p>
+        <p className="mt-1 text-xs text-ink-faint">Your teacher hasn{"’"}t assigned any tests yet.</p>
       </Card>
     );
   }
@@ -27,23 +27,22 @@ export default function TestList({ rows, classNameById, onStart, onViewResult }:
   return (
     <div className="space-y-3">
       {rows.map(({ test, attempt }) => (
-        <Card key={test.id} className="hover:border-indigo-200 transition-colors duration-150">
+        <Card key={test.id} className="hover:border-line transition-colors duration-150">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <p className="font-semibold text-indigo-950">{test.title}</p>
+                <p className="font-display text-base font-semibold text-ink">{test.title}</p>
                 {attempt ? (
                   <Badge variant={attempt.status === "graded" ? "green" : "blue"}>{attempt.status}</Badge>
                 ) : (
                   <Badge variant="gray">Not started</Badge>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-slate-400">{classNameById.get(test.class_id) ?? ""}</p>
+              <p className="mt-0.5 text-xs text-ink-faint">{classNameById.get(test.class_id) ?? ""}</p>
               {attempt?.status === "graded" ? (
-                <div className="mt-1.5 inline-flex items-baseline gap-1">
-                  <span className="text-lg font-bold text-indigo-600">{attempt.total_marks}</span>
-                  <span className="text-xs text-slate-400">/ {attempt.max_marks}</span>
-                </div>
+                <p className="mt-1 font-hand -rotate-2 text-2xl font-bold text-pen">
+                  {attempt.total_marks}/{attempt.max_marks}
+                </p>
               ) : null}
             </div>
             <div className="flex gap-2">
@@ -56,7 +55,7 @@ export default function TestList({ rows, classNameById, onStart, onViewResult }:
                   View result
                 </button>
               ) : (
-                <span className="text-xs text-slate-400 self-center">Awaiting grade</span>
+                <span className="text-xs text-ink-faint self-center">Awaiting grade</span>
               )}
             </div>
           </div>

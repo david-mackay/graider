@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, SectionHeader, btnSecondary } from "@/components/shared/ui";
 import { IconCheck } from "@/components/shared/icons";
 import { handleJson } from "@/lib/dashboard-client";
@@ -33,13 +33,33 @@ function activeStepId(state: WizardState): StepDef["id"] {
 
 export default function GradeWizard() {
   const wizard = useStackGrade();
-  const { state, selectedTest, preview, assignments, results, errorMessage, isBusy, actions } =
+  const { state, selectedTest, preview, pageFiles, assignments, results, errorMessage, isBusy, actions } =
     wizard;
 
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [rosterLoading, setRosterLoading] = useState<boolean>(false);
   const [rosterError, setRosterError] = useState<string>("");
   const [rosterClassId, setRosterClassId] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  // Welcome banner after the onboarding funnel hands the teacher over.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("welcome") === "1") {
+      setShowWelcome(true);
+      params.delete("welcome");
+      const query = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    }
+  }, []);
+
+  // Object URLs for the uploaded page photos, indexed by pageIndex.
+  const pageImageUrls = useMemo(() => pageFiles.map((file) => URL.createObjectURL(file)), [pageFiles]);
+  useEffect(() => {
+    return () => {
+      for (const url of pageImageUrls) URL.revokeObjectURL(url);
+    };
+  }, [pageImageUrls]);
 
   useEffect(() => {
     if (!selectedTest) {
@@ -76,13 +96,23 @@ export default function GradeWizard() {
   const activeId = activeStepId(state);
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+      {showWelcome ? (
+        <div className="mb-6 animate-rise rounded-2xl border border-moss/30 bg-moss-wash px-5 py-4 shadow-paper">
+          <p className="font-hand text-2xl text-moss-deep">Your first paper is saved.</p>
+          <p className="mt-1 text-sm text-ink-soft">
+            This is where you grade whole stacks — pick a test, photograph the pile, and the red pen takes it from there.
+          </p>
+        </div>
+      ) : null}
+
       <SectionHeader
+        overline="The red pen"
         title="Grade a stack"
-        subtitle="Upload photos of handwritten papers; we&rsquo;ll OCR, match each page to a student, and grade in one pass."
+        subtitle="Upload photos of handwritten papers; we'll read each page, match it to a student, and grade in one pass."
       />
 
-      <ol className="mb-6 flex items-center gap-2" aria-label="Wizard steps">
+      <ol className="mb-8 flex items-center gap-2" aria-label="Wizard steps">
         {STEPS.map((step, index) => {
           const isActive = step.matches(state);
           const isComplete = step.id < activeId;
@@ -93,26 +123,26 @@ export default function GradeWizard() {
               aria-current={isActive ? "step" : undefined}
             >
               <div
-                className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors duration-150 ${
+                className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full font-display text-xs font-bold transition-colors duration-150 ${
                   isComplete
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-moss text-white"
                     : isActive
-                      ? "bg-indigo-600 text-white"
-                      : "bg-indigo-50 text-indigo-400"
+                      ? "bg-pen text-white"
+                      : "bg-cream-deep text-ink-faint"
                 }`}
               >
                 {isComplete ? <IconCheck className="h-4 w-4" /> : step.id}
               </div>
               <span
-                className={`hidden text-sm font-medium sm:inline ${
-                  isActive ? "text-indigo-950" : isComplete ? "text-emerald-700" : "text-slate-400"
+                className={`hidden text-sm font-bold sm:inline ${
+                  isActive ? "text-ink" : isComplete ? "text-moss-deep" : "text-ink-faint"
                 }`}
               >
                 {step.label}
               </span>
               {index < STEPS.length - 1 ? (
                 <span
-                  className={`h-px flex-1 ${isComplete ? "bg-emerald-300" : "bg-indigo-100"}`}
+                  className={`h-px flex-1 ${isComplete ? "bg-moss/40" : "bg-line"}`}
                   aria-hidden="true"
                 />
               ) : null}
@@ -125,12 +155,12 @@ export default function GradeWizard() {
 
       {(state === "uploadStack" || state === "preview-loading") && selectedTest ? (
         <div className="space-y-3">
-          <Card className="flex flex-wrap items-center justify-between gap-3 bg-indigo-50/40">
+          <Card className="flex flex-wrap items-center justify-between gap-3 bg-cream">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400">
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
                 Selected test
               </p>
-              <p className="mt-0.5 text-sm font-semibold text-indigo-950">
+              <p className="mt-0.5 font-display text-base font-semibold text-ink">
                 {selectedTest.title}
               </p>
             </div>
@@ -157,19 +187,20 @@ export default function GradeWizard() {
       {(state === "reviewing" || state === "committing") && preview && selectedTest ? (
         <div className="space-y-3">
           {rosterError ? (
-            <Card className="border-red-200 bg-red-50">
-              <p className="text-sm font-medium text-red-700">{rosterError}</p>
+            <Card className="border-pen-soft/60 bg-pen-wash">
+              <p className="text-sm font-bold text-pen-deep">{rosterError}</p>
             </Card>
           ) : null}
           {rosterLoading ? (
             <Card>
               <div className="flex items-center justify-center py-6">
-                <div className="h-6 w-6 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+                <div className="h-6 w-6 animate-spin rounded-full border-4 border-pen border-t-transparent" />
               </div>
             </Card>
           ) : (
             <StepReviewMatches
               pages={preview.pages}
+              pageImageUrls={pageImageUrls}
               roster={roster}
               assignments={assignments}
               onAssignmentChange={actions.setAssignment}

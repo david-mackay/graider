@@ -12,10 +12,10 @@ export default function StatusBanner({ message, type, onDismiss }: StatusBannerP
   return (
     <div
       role="alert"
-      className={`mb-4 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm font-medium ${
+      className={`mb-4 flex animate-rise items-start gap-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-paper ${
         type === "error"
-          ? "border-red-200 bg-red-50 text-red-700"
-          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          ? "border-pen-soft/60 bg-pen-wash text-pen-deep"
+          : "border-moss/30 bg-moss-wash text-moss-deep"
       }`}
     >
       {type === "error" ? (

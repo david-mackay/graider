@@ -94,12 +94,12 @@ export default function InvitesPanel({
   }
 
   return (
-    <div className="mt-3 space-y-4 border-t border-indigo-100 pt-3">
+    <div className="mt-3 space-y-4 border-t border-line-soft pt-3">
       <div className="flex flex-wrap items-end gap-2">
         <div>
-          <label className="text-xs font-medium text-slate-500">Expiry</label>
+          <label className="text-xs font-medium text-ink-soft">Expiry</label>
           <select
-            className="mt-0.5 block w-full cursor-pointer rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-xs text-indigo-900 outline-none focus:border-indigo-400 transition-colors duration-150"
+            className="mt-0.5 block w-full cursor-pointer rounded-lg border border-line bg-paper px-2 py-1.5 text-xs text-ink outline-none focus:border-pen/50 transition-colors duration-150"
             value={inviteExpiry}
             onChange={(e) => setInviteExpiry(e.target.value)}
           >
@@ -128,7 +128,7 @@ export default function InvitesPanel({
       </div>
 
       {invitations.length === 0 ? (
-        <p className="text-xs text-slate-400">No invite codes yet. Generate one above.</p>
+        <p className="text-xs text-ink-faint">No invite codes yet. Generate one above.</p>
       ) : (
         <div className="space-y-1.5">
           {invitations.map((inv) => {
@@ -138,18 +138,18 @@ export default function InvitesPanel({
                 key={inv.id}
                 className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
                   derivedStatus === "accepted"
-                    ? "border-slate-100 bg-slate-50/50"
+                    ? "border-line-soft bg-cream/50"
                     : derivedStatus === "expired"
-                      ? "border-red-100 bg-red-50/30"
-                      : "border-indigo-100 bg-white"
+                      ? "border-pen-soft/40 bg-pen-wash/30"
+                      : "border-line-soft bg-paper"
                 }`}
               >
-                <code className="font-mono font-semibold text-indigo-700">{inv.code}</code>
+                <code className="font-mono font-semibold text-pen-deep">{inv.code}</code>
                 <Badge variant={inv.role === "teacher" ? "blue" : "gray"}>{inv.role}</Badge>
                 <Badge variant={derivedStatus === "active" ? "green" : derivedStatus === "expired" ? "yellow" : "gray"}>
                   {derivedStatus}
                 </Badge>
-                <span className="text-slate-400">
+                <span className="text-ink-faint">
                   {derivedStatus === "accepted" && inv.accepted_by_name
                     ? inv.accepted_by_name
                     : formatExpiry(inv)}
@@ -159,10 +159,10 @@ export default function InvitesPanel({
                     <button
                       type="button"
                       onClick={() => void copyCode(inv.id, inv.code)}
-                      className="cursor-pointer flex items-center gap-1 rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 transition-colors duration-150"
+                      className="cursor-pointer flex items-center gap-1 rounded-md px-1.5 py-0.5 text-ink-soft hover:bg-cream hover:text-pen-deep transition-colors duration-150"
                     >
                       {copiedId === inv.id ? (
-                        <IconCheck className="h-3 w-3 text-emerald-600" />
+                        <IconCheck className="h-3 w-3 text-moss" />
                       ) : (
                         <IconCopy className="h-3 w-3" />
                       )}
@@ -173,7 +173,7 @@ export default function InvitesPanel({
                       type="button"
                       disabled={isBusy}
                       onClick={() => void deleteInvite(inv.id)}
-                      className="cursor-pointer rounded-md px-1.5 py-0.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
+                      className="cursor-pointer rounded-md px-1.5 py-0.5 text-ink-faint hover:bg-pen-wash hover:text-pen transition-colors duration-150"
                     >
                       <IconX className="h-3 w-3" />
                     </button>

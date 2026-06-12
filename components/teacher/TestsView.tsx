@@ -6,6 +6,7 @@ import { IconClipboard, IconX } from "@/components/shared/icons";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
 import type { OcrAnswer, TestDetail } from "@/lib/types";
 import type {
+  ClassMember,
   DashboardAttempt,
   DashboardQuestion,
   DashboardTest,
@@ -20,6 +21,7 @@ type TestsViewProps = {
   questions: DashboardQuestion[];
   testsInScope: DashboardTest[];
   attemptsInScope: DashboardAttempt[];
+  members: ClassMember[];
   onChanged: () => void | Promise<void>;
   onStatus: (message: string, type?: "info" | "error") => void;
   onGoToClasses: () => void;
@@ -35,6 +37,7 @@ export default function TestsView({
   questions,
   testsInScope,
   attemptsInScope,
+  members,
   onChanged,
   onStatus,
   onGoToClasses,
@@ -54,6 +57,12 @@ export default function TestsView({
 
   const filteredAttempts =
     submissionFilter === "all" ? attemptsInScope : attemptsInScope.filter((a) => a.status === submissionFilter);
+
+  const memberById = new Map(members.map((m) => [m.user_id, m] as const));
+  function studentLabel(studentId: string): string {
+    const member = memberById.get(studentId);
+    return member?.full_name?.trim() || member?.email || `${studentId.slice(0, 12)}…`;
+  }
 
   const grouped: GroupedQuestions[] = (() => {
     const map = new Map<string, DashboardQuestion[]>();
@@ -234,12 +243,12 @@ export default function TestsView({
               + Create new test
             </button>
           ) : (
-            <Card className="border-indigo-300">
+            <Card className="border-ink-faint">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-indigo-950">New test</h3>
+                <h3 className="text-sm font-semibold text-ink">New test</h3>
                 <button
                   type="button"
-                  className="cursor-pointer text-xs text-slate-400 hover:text-slate-600"
+                  className="cursor-pointer text-xs text-ink-faint hover:text-ink"
                   onClick={() => {
                     setTestTitle("");
                     setSelectedQuestionIds([]);
@@ -249,10 +258,10 @@ export default function TestsView({
                 </button>
               </div>
               {questions.length === 0 ? (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-ink-soft">
                   No questions in this class yet.{" "}
                   <button
-                    className="cursor-pointer text-indigo-600 underline hover:no-underline"
+                    className="cursor-pointer text-pen underline hover:no-underline"
                     type="button"
                     onClick={onGoToQuestions}
                   >
@@ -272,11 +281,11 @@ export default function TestsView({
                     />
                   </FormField>
                   <div>
-                    <p className="mb-2 text-sm font-medium text-slate-700">Select questions</p>
+                    <p className="mb-2 text-sm font-medium text-ink-soft">Select questions</p>
                     <div className="space-y-3">
                       {grouped.map((group) => (
                         <div key={group.topic}>
-                          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-400">
+                          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">
                             {group.topic}
                           </p>
                           <div className="space-y-1.5">
@@ -285,19 +294,19 @@ export default function TestsView({
                                 key={q.id}
                                 className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors duration-150 ${
                                   selectedQuestionIds.includes(q.id)
-                                    ? "border-indigo-300 bg-indigo-50"
-                                    : "border-indigo-100 bg-white hover:bg-indigo-50/40"
+                                    ? "border-ink-faint bg-cream"
+                                    : "border-line-soft bg-paper hover:bg-cream"
                                 }`}
                               >
                                 <input
                                   type="checkbox"
-                                  className="mt-0.5 h-4 w-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                                  className="mt-0.5 h-4 w-4 rounded border-ink-faint text-pen focus:ring-pen"
                                   checked={selectedQuestionIds.includes(q.id)}
                                   onChange={() => toggleQuestion(q.id)}
                                 />
-                                <span className="flex-1 text-sm text-indigo-900">
+                                <span className="flex-1 text-sm text-ink">
                                   {q.prompt}
-                                  <span className="ml-2 text-xs text-slate-400">
+                                  <span className="ml-2 text-xs text-ink-faint">
                                     {q.marks} mark{q.marks !== 1 ? "s" : ""}
                                   </span>
                                 </span>
@@ -309,10 +318,10 @@ export default function TestsView({
                     </div>
                   </div>
                   {selectedQuestionIds.length > 0 ? (
-                    <p className="text-xs text-slate-500">
-                      <span className="font-semibold text-indigo-600">{selectedQuestionIds.length}</span> question
+                    <p className="text-xs text-ink-soft">
+                      <span className="font-semibold text-pen">{selectedQuestionIds.length}</span> question
                       {selectedQuestionIds.length !== 1 ? "s" : ""} ·{" "}
-                      <span className="font-semibold text-indigo-600">
+                      <span className="font-semibold text-pen">
                         {questions.filter((q) => selectedQuestionIds.includes(q.id)).reduce((sum, q) => sum + q.marks, 0)}
                       </span>{" "}
                       marks total
@@ -332,11 +341,11 @@ export default function TestsView({
         </div>
       ) : (
         <Card className="text-center py-8">
-          <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
-            <IconClipboard className="h-5 w-5 text-indigo-400" />
+          <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cream">
+            <IconClipboard className="h-5 w-5 text-ink-faint" />
           </div>
-          <p className="text-sm font-semibold text-indigo-950">{!classId ? "No class selected" : "Access restricted"}</p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="text-sm font-semibold text-ink">{!classId ? "No class selected" : "Access restricted"}</p>
+          <p className="mt-1 text-xs text-ink-faint">
             {!classId ? "Open a class to manage its tests." : "You need to be a teacher of this class to manage tests."}
           </p>
           {!classId ? (
@@ -348,16 +357,16 @@ export default function TestsView({
       )}
 
       {selectedTest ? (
-        <Card className="border-indigo-300">
+        <Card className="border-ink-faint">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-400">Preview</p>
-              <h3 className="mt-0.5 font-semibold text-indigo-950">{selectedTest.title}</h3>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Preview</p>
+              <h3 className="mt-0.5 font-semibold text-ink">{selectedTest.title}</h3>
             </div>
             <button
               type="button"
               onClick={() => setSelectedTest(null)}
-              className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-indigo-50 transition-colors duration-150"
+              className="cursor-pointer rounded-lg p-1.5 text-ink-faint hover:bg-cream transition-colors duration-150"
               aria-label="Close preview"
             >
               <IconX className="h-5 w-5" />
@@ -365,11 +374,11 @@ export default function TestsView({
           </div>
           <div className="space-y-2">
             {selectedTest.questions.map((q, i) => (
-              <div key={q.question_id} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
-                <p className="text-xs font-semibold text-indigo-400">
+              <div key={q.question_id} className="rounded-lg border border-line-soft bg-cream p-3">
+                <p className="text-xs font-semibold text-ink-faint">
                   Q{i + 1} · {q.marks} mark{q.marks !== 1 ? "s" : ""}
                 </p>
-                <p className="mt-0.5 text-sm text-indigo-900">{q.prompt}</p>
+                <p className="mt-0.5 text-sm text-ink">{q.prompt}</p>
               </div>
             ))}
           </div>
@@ -377,11 +386,11 @@ export default function TestsView({
       ) : null}
 
       {selectedAttemptDetail ? (
-        <Card className="border-indigo-200">
+        <Card className="border-line">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-indigo-950">{selectedAttemptDetail.test_title}</h3>
+                <h3 className="text-sm font-semibold text-ink">{selectedAttemptDetail.test_title}</h3>
                 <Badge
                   variant={
                     selectedAttemptDetail.status === "graded"
@@ -394,57 +403,54 @@ export default function TestsView({
                   {selectedAttemptDetail.status}
                 </Badge>
               </div>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Student: {selectedAttemptDetail.student_id.slice(0, 12)}…
+              <p className="mt-0.5 text-xs text-ink-faint">
+                Student: {studentLabel(selectedAttemptDetail.student_id)}
               </p>
               {selectedAttemptDetail.status === "graded" ? (
-                <div className="mt-2 inline-flex items-baseline gap-1">
-                  <span className="text-2xl font-extrabold text-indigo-600">{selectedAttemptDetail.total_marks}</span>
-                  <span className="text-sm font-medium text-slate-400">/ {selectedAttemptDetail.max_marks}</span>
-                </div>
+                <p className="mt-2 font-hand -rotate-2 text-3xl font-bold text-pen">
+                  {selectedAttemptDetail.total_marks}/{selectedAttemptDetail.max_marks}
+                </p>
               ) : (
-                <p className="mt-1 text-sm text-amber-700">Not yet graded.</p>
+                <p className="mt-1 text-sm text-marigold-deep">Not yet graded.</p>
               )}
             </div>
             <button type="button" className={btnSecondary} onClick={() => setSelectedAttemptDetail(null)}>
               Close
             </button>
           </div>
-          <div className="mt-4 space-y-3 border-t border-indigo-100 pt-4">
-            <p className="text-sm font-semibold text-indigo-950">Question breakdown</p>
+          <div className="mt-4 space-y-3 border-t border-line-soft pt-4">
+            <p className="text-sm font-semibold text-ink">Question breakdown</p>
             {selectedAttemptDetail.questions.map((question, index) => (
-              <div key={question.question_id} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-4">
+              <div key={question.question_id} className="rounded-lg border border-line-soft bg-cream p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-indigo-400">
+                  <p className="text-xs font-semibold text-ink-faint">
                     Q{index + 1} · {question.marks} mark{question.marks !== 1 ? "s" : ""}
                   </p>
                   {question.marks_earned != null ? (
                     <span
                       className={`text-sm font-bold ${
                         question.marks_earned === question.marks
-                          ? "text-emerald-600"
+                          ? "text-moss"
                           : question.marks_earned > 0
-                            ? "text-amber-600"
-                            : "text-red-500"
+                            ? "text-marigold"
+                            : "text-pen"
                       }`}
                     >
                       {question.marks_earned}/{question.marks}
                     </span>
                   ) : (
-                    <span className="text-sm text-slate-400">—</span>
+                    <span className="text-sm text-ink-faint">—</span>
                   )}
                 </div>
-                <p className="mt-1.5 text-sm font-medium text-indigo-950">{question.prompt}</p>
-                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Student answer</p>
-                <pre className="mt-1 whitespace-pre-wrap rounded-md border border-indigo-100 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700">
+                <p className="mt-1.5 text-sm font-medium text-ink">{question.prompt}</p>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Student answer</p>
+                <pre className="mt-1 whitespace-pre-wrap rounded-md border border-line-soft bg-paper px-3 py-2 text-xs leading-relaxed text-ink-soft">
                   {question.student_answer || "No answer provided."}
                 </pre>
                 {question.feedback ? (
-                  <div className="mt-3 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2">
-                    <p className="text-xs text-emerald-800">
-                      <span className="font-semibold">Feedback:</span> {question.feedback}
-                    </p>
-                  </div>
+                  <p className="mt-3 border-l-2 border-pen-soft pl-3 font-hand text-lg leading-snug text-pen-deep">
+                    {question.feedback}
+                  </p>
                 ) : null}
               </div>
             ))}
@@ -456,7 +462,7 @@ export default function TestsView({
         <div className="space-y-6">
           <div>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-indigo-300">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
                 Student submissions · {attemptsInScope.length}
               </h3>
               <div className="flex gap-1">
@@ -466,7 +472,7 @@ export default function TestsView({
                     type="button"
                     onClick={() => setSubmissionFilter(f)}
                     className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-150 capitalize ${
-                      submissionFilter === f ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                      submissionFilter === f ? "bg-pen text-white" : "bg-cream text-pen hover:bg-cream-deep"
                     }`}
                   >
                     {f}
@@ -476,18 +482,18 @@ export default function TestsView({
             </div>
             {filteredAttempts.length === 0 ? (
               <Card className="text-center py-8">
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-ink-soft">
                   {attemptsInScope.length === 0 ? "No submissions yet." : `No ${submissionFilter} submissions.`}
                 </p>
               </Card>
             ) : (
               <div className="space-y-2">
                 {filteredAttempts.map((attempt) => (
-                  <Card key={attempt.id} className="hover:border-indigo-200 transition-colors duration-150">
+                  <Card key={attempt.id} className="hover:border-line transition-colors duration-150">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-semibold text-indigo-950">{attempt.test_title}</p>
+                          <p className="font-display text-base font-semibold text-ink">{attempt.test_title}</p>
                           <Badge
                             variant={
                               attempt.status === "graded"
@@ -500,12 +506,11 @@ export default function TestsView({
                             {attempt.status}
                           </Badge>
                         </div>
-                        <p className="mt-0.5 text-xs text-slate-400">Student: {attempt.student_id.slice(0, 12)}…</p>
+                        <p className="mt-0.5 text-xs text-ink-faint">Student: {studentLabel(attempt.student_id)}</p>
                         {attempt.status === "graded" ? (
-                          <div className="mt-1.5 inline-flex items-baseline gap-1">
-                            <span className="text-lg font-bold text-indigo-600">{attempt.total_marks}</span>
-                            <span className="text-xs text-slate-400">/ {attempt.max_marks}</span>
-                          </div>
+                          <p className="mt-1 font-hand -rotate-2 text-2xl font-bold text-pen">
+                            {attempt.total_marks}/{attempt.max_marks}
+                          </p>
                         ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -524,13 +529,13 @@ export default function TestsView({
                         ) : null}
                       </div>
                     </div>
-                    <div className="mt-3 border-t border-indigo-100 pt-3">
+                    <div className="mt-3 border-t border-line-soft pt-3">
                       <button
                         type="button"
                         onClick={() =>
                           setExpandedOcrAttemptId(expandedOcrAttemptId === attempt.id ? null : attempt.id)
                         }
-                        className="cursor-pointer text-xs font-medium text-indigo-400 hover:text-indigo-600 transition-colors duration-150"
+                        className="cursor-pointer text-xs font-medium text-ink-faint hover:text-pen transition-colors duration-150"
                       >
                         {expandedOcrAttemptId === attempt.id ? "Hide" : "Upload handwritten answers (OCR)"}
                       </button>
@@ -541,7 +546,7 @@ export default function TestsView({
                             accept="image/*"
                             multiple
                             aria-label="Upload handwritten answer sheet images"
-                            className="text-xs text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                            className="text-xs text-ink-soft file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-cream file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-pen-deep hover:file:bg-cream-deep"
                             onChange={(e) => {
                               const files = e.target.files ? Array.from(e.target.files) : [];
                               setOcrFilesByAttempt((c) => ({ ...c, [attempt.id]: files }));
@@ -556,7 +561,7 @@ export default function TestsView({
                             Run OCR
                           </button>
                           {ocrFeedback[attempt.id] ? (
-                            <p className="text-xs text-slate-500">{ocrFeedback[attempt.id]}</p>
+                            <p className="text-xs text-ink-soft">{ocrFeedback[attempt.id]}</p>
                           ) : null}
                         </div>
                       ) : null}
@@ -568,7 +573,7 @@ export default function TestsView({
           </div>
 
           <div>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-indigo-300">Tests in this class</h3>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-faint">Tests in this class</h3>
             <div className="space-y-2">
               {testsInScope.map((test) => {
                 const ungradedCount = attemptsInScope.filter(
@@ -576,16 +581,16 @@ export default function TestsView({
                 ).length;
                 const totalSubmissions = attemptsInScope.filter((a) => a.test_id === test.id).length;
                 return (
-                  <Card key={test.id} className="hover:border-indigo-200 transition-colors duration-150">
+                  <Card key={test.id} className="hover:border-line transition-colors duration-150">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-semibold text-indigo-950">{test.title}</p>
+                          <p className="font-semibold text-ink">{test.title}</p>
                           <Badge variant={test.grades_released ? "green" : "gray"}>
                             {test.grades_released ? "Released" : "Unreleased"}
                           </Badge>
                         </div>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-ink-faint">
                           {totalSubmissions} submission{totalSubmissions !== 1 ? "s" : ""}
                           {ungradedCount > 0 ? ` · ${ungradedCount} ungraded` : ""}
                         </p>
@@ -594,7 +599,7 @@ export default function TestsView({
                         Preview
                       </button>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-indigo-100 pt-3">
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
                       {ungradedCount > 0 ? (
                         <button
                           className={btnPrimary}

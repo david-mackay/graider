@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "r
 import { useRouter } from "next/navigation";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
-import { IconClipboard, IconX } from "@/components/shared/icons";
+import { IconX } from "@/components/shared/icons";
 import { getVault, setVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 
@@ -112,13 +112,11 @@ export default function OnboardingUploadPage() {
   return (
     <OnboardingShell step={4} backHref="/onboarding/answer-key">
       <div className="text-center">
-        <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-xl shadow-indigo-300/40">
-          <IconClipboard className="h-8 w-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-indigo-950 sm:text-4xl">
+        <p className="font-hand text-2xl text-pen">Step two</p>
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           Now drop a photo of your student&rsquo;s answer.
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-slate-500">
+        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
           JPG or PNG. We&rsquo;ll read the handwriting for you.
         </p>
       </div>
@@ -133,8 +131,8 @@ export default function OnboardingUploadPage() {
           onDrop={onDrop}
           className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-colors duration-150 ${
             isDragging
-              ? "border-indigo-500 bg-indigo-50"
-              : "border-indigo-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/40"
+              ? "border-pen bg-pen-wash"
+              : "border-line bg-paper hover:border-ink-faint hover:bg-cream"
           }`}
         >
           <input
@@ -149,19 +147,19 @@ export default function OnboardingUploadPage() {
             <img
               src={previewUrl}
               alt={file?.name ?? "Selected paper"}
-              className="max-h-64 rounded-lg border border-indigo-100 shadow-sm"
+              className="max-h-64 -rotate-1 rounded-lg border border-line shadow-card"
             />
           ) : (
             <>
-              <span className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+              <span className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-pen-wash text-pen">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                 </svg>
               </span>
-              <p className="text-sm font-semibold text-indigo-950">
+              <p className="text-sm font-bold text-ink">
                 Drop a photo here, or click to choose
               </p>
-              <p className="mt-1 text-xs text-slate-400">JPG or PNG · up to 8 MB</p>
+              <p className="mt-1 text-xs text-ink-faint">JPG or PNG · up to 8 MB</p>
             </>
           )}
         </label>
@@ -170,8 +168,8 @@ export default function OnboardingUploadPage() {
           <Card className="mt-4">
             <div className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-indigo-950">{file.name}</p>
-                <p className="text-xs text-slate-400">
+                <p className="truncate text-sm font-bold text-ink">{file.name}</p>
+                <p className="text-xs text-ink-faint">
                   {(file.size / 1024).toFixed(0)} KB · {file.type || "image"}
                 </p>
               </div>
@@ -181,7 +179,7 @@ export default function OnboardingUploadPage() {
                   setFile(null);
                   if (inputRef.current) inputRef.current.value = "";
                 }}
-                className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors duration-150"
+                className="cursor-pointer rounded-lg p-1.5 text-ink-faint hover:bg-pen-wash hover:text-pen transition-colors duration-150"
                 aria-label="Remove file"
               >
                 <IconX className="h-4 w-4" />
@@ -193,7 +191,7 @@ export default function OnboardingUploadPage() {
         {error ? (
           <p
             role="alert"
-            className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            className="mt-4 rounded-xl border border-pen-soft/60 bg-pen-wash px-3.5 py-2.5 text-sm font-bold text-pen-deep"
           >
             {error}
           </p>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
-import { IconSparkle } from "@/components/shared/icons";
+import { BrandMark } from "@/components/shared/Brand";
 import { clearVault, getVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
 import type { OnboardingSyncResponse } from "@/lib/types";
@@ -63,32 +63,32 @@ export default function OnboardingSyncPage() {
   }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-indigo-50/60 via-white to-violet-50/30 px-4 py-12">
-      <div className="w-full max-w-md">
-        <Card className="border-indigo-200">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md animate-rise">
+        <Card>
           <div className="text-center">
-            <div className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-lg shadow-indigo-300/40">
-              <IconSparkle className="h-7 w-7 text-white" />
+            <div className="mx-auto mb-5 inline-flex">
+              <BrandMark className="h-14 w-14" />
             </div>
 
             {state.kind === "loading" || state.kind === "redirecting" ? (
               <>
-                <h1 className="text-lg font-bold text-indigo-950">
+                <h1 className="font-display text-xl font-semibold text-ink">
                   Saving your first graded test&hellip;
                 </h1>
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-ink-soft">
                   Setting up your starter class and seeding the sample grade.
                 </p>
                 <div className="mt-6 flex justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-pen border-t-transparent" />
                 </div>
               </>
             ) : null}
 
             {state.kind === "error" ? (
               <>
-                <h1 className="text-lg font-bold text-indigo-950">Something went wrong</h1>
-                <p className="mt-2 text-sm text-red-700">{state.message}</p>
+                <h1 className="font-display text-xl font-semibold text-ink">Something went wrong</h1>
+                <p className="mt-2 text-sm font-bold text-pen-deep">{state.message}</p>
                 <div className="mt-5 flex flex-wrap justify-center gap-2">
                   <button
                     type="button"

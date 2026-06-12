@@ -84,7 +84,7 @@ export default function StepPickTest({ onSelect }: StepPickTestProps) {
     return (
       <Card>
         <div className="flex items-center justify-center py-10">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-pen border-t-transparent" />
         </div>
       </Card>
     );
@@ -92,8 +92,8 @@ export default function StepPickTest({ onSelect }: StepPickTestProps) {
 
   if (loadError) {
     return (
-      <Card className="border-red-200 bg-red-50">
-        <p className="text-sm font-medium text-red-700">{loadError}</p>
+      <Card className="border-pen-soft/60 bg-pen-wash">
+        <p className="text-sm font-bold text-pen-deep">{loadError}</p>
       </Card>
     );
   }
@@ -102,12 +102,12 @@ export default function StepPickTest({ onSelect }: StepPickTestProps) {
     return (
       <Card>
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50">
-            <IconClipboard className="h-6 w-6 text-indigo-500" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-pen-wash">
+            <IconClipboard className="h-7 w-7 text-pen" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-indigo-950">No tests yet</h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <h3 className="font-display text-lg font-semibold text-ink">The desk is clear</h3>
+            <p className="mt-1 text-sm text-ink-soft">
               Create a class and a test first, then come back to grade a stack of papers.
             </p>
           </div>
@@ -135,30 +135,30 @@ export default function StepPickTest({ onSelect }: StepPickTestProps) {
 
       {grouped.length === 0 ? (
         <Card>
-          <p className="text-sm text-slate-500">No tests match &ldquo;{search}&rdquo;.</p>
+          <p className="text-sm text-ink-soft">No tests match &ldquo;{search}&rdquo;.</p>
         </Card>
       ) : (
         grouped.map((group) => (
           <Card key={group.classId}>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-indigo-400">
+              <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
                 {group.className}
               </h3>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-ink-faint">
                 {group.tests.length} test{group.tests.length === 1 ? "" : "s"}
               </span>
             </div>
-            <ul className="divide-y divide-indigo-100">
+            <ul className="divide-y divide-line-soft">
               {group.tests.map((test) => (
                 <li
                   key={test.id}
                   className="flex flex-wrap items-center justify-between gap-3 py-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-indigo-950">
+                    <p className="truncate font-display text-base font-semibold text-ink">
                       {test.title}
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-ink-faint">
                       {test.grades_released ? "Grades released" : "Grades not yet released"}
                     </p>
                   </div>

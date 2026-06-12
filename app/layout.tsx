@@ -1,17 +1,28 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Caveat, Fraunces, Nunito } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 
-const inter = Inter({
-  variable: "--font-inter",
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  style: ["normal", "italic"],
+});
+
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin"],
+});
+
+const caveat = Caveat({
+  variable: "--font-caveat",
+  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "grAIder – AI-Powered Test Grading",
-  description: "The AI grading assistant for teachers — build tests, collect submissions, and get instant AI-graded results.",
+  title: "Graider — the AI red pen",
+  description:
+    "Photograph a stack of papers and Graider reads, matches, and marks every one — so the grading is done before your coffee is.",
 };
 
 export default function RootLayout({
@@ -22,7 +33,9 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" className="h-full">
-        <body className={`${inter.variable} font-sans antialiased h-full bg-[#f5f3ff] text-indigo-950`}>
+        <body
+          className={`${fraunces.variable} ${nunito.variable} ${caveat.variable} font-sans antialiased h-full`}
+        >
           {children}
         </body>
       </html>
