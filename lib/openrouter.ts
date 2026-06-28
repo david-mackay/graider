@@ -1,4 +1,5 @@
 import { OcrAnswer, OcrPage } from "@/lib/types";
+import type { ParsedImportQuestion } from "@/lib/types";
 
 export type GradeResult = {
   marks_earned: number;
@@ -279,4 +280,132 @@ export async function extractHandwrittenStack(
       answers,
     };
   });
+}
+
+function normalizeParsedQuestions(raw: unknown): ParsedImportQuestion[] {
+  if (!Array.isArray(raw)) return [];
+  const results: ParsedImportQuestion[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const prompt = typeof record.prompt === "string" ? record.prompt.trim() : "";
+    const correctAnswer =
+      typeof record.correct_answer === "string"
+        ? record.correct_answer.trim()
+        : typeof record.correctAnswer === "string"
+          ? record.correctAnswer.trim()
+          : "";
+    const marksRaw = Number(record.marks);
+    const marks = Number.isFinite(marksRaw) ? Math.max(0, Math.round(marksRaw)) : 1;
+    const topic =
+      typeof record.topic === "string" && record.topic.trim() ? record.topic.trim() : null;
+    if (!prompt || !correctAnswer) continue;
+    results.push({ prompt, correct_answer: correctAnswer, marks, topic });
+  }
+  return results;
+}
+
+export async function parseQuestionBankFromText(text: string): Promise<ParsedImportQuestion[]> {
+  const parsed = await callOpenRouter(
+    [
+      {
+        role: "system",
+        content:
+          "You extract structured exam questions from documents. Return JSON only.",
+      },
+      {
+        role: "user",
+        content:
+          `Extract every question from this document for a teacher question bank.\n` +
+          `For each question include: prompt (student-facing), correct_answer (model answer), marks (integer), topic (short subject label).\n` +
+          `Return JSON: {"questions":[{"prompt":"...","correct_answer":"...","marks":2,"topic":"..."}]}\n\n` +
+          `Document:\n${text}`,
+      },
+    ],
+    DEFAULT_MODEL,
+  );
+  const questions = normalizeParsedQuestions(parsed.questions);
+  if (questions.length === 0) {
+    throw new Error("No questions found in the PDF.");
+  }
+  return questions;
+}
+
+export async function parseTestFromText(text: string): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
+  const parsed = await callOpenRouter(
+    [
+      {
+        role: "system",
+        content: "You extract structured tests from documents. Return JSON only.",
+      },
+      {
+        role: "user",
+        content:
+          `Extract a test title and all questions from this document.\n` +
+          `Return JSON: {"title":"...","questions":[{"prompt":"...","correct_answer":"...","marks":2,"topic":"..."}]}\n\n` +
+          `Document:\n${text}`,
+      },
+    ],
+    DEFAULT_MODEL,
+  );
+  const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : "Imported test";
+  const questions = normalizeParsedQuestions(parsed.questions);
+  if (questions.length === 0) {
+    throw new Error("No questions found in the test PDF.");
+  }
+  return { title, questions };
+}
+
+export async function parseTestFromStackImages(
+  images: { filename: string; mimeType: string; base64: string }[],
+): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
+  if (images.length === 0) {
+    throw new Error("At least one image is required to detect a test.");
+  }
+
+  const sample = images.slice(0, 3);
+  const imageParts = sample.map((entry) => ({
+    type: "image_url" as const,
+    image_url: {
+      url: `data:${entry.mimeType};base64,${entry.base64}`,
+    },
+  }));
+
+  const parsed = await callOpenRouter(
+    [
+      {
+        role: "system",
+        content:
+          "You analyze photographed student test papers and extract the test structure for a teacher grading app. Return JSON only.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text:
+              "These photos are handwritten student test papers from the same assessment. " +
+              "Extract the test title (from a header if visible, otherwise infer a short descriptive title) " +
+              "and every question prompt shown on the papers. " +
+              "For each question, provide a model correct_answer a teacher would use to grade responses " +
+              "(infer from the question when no answer key is visible). " +
+              "Assign reasonable integer marks per question (default 1–5 based on complexity). " +
+              "Return JSON: {\"title\":\"...\",\"questions\":[{\"prompt\":\"...\",\"correct_answer\":\"...\",\"marks\":2,\"topic\":\"...\"}]}",
+          },
+          ...imageParts,
+        ],
+      },
+    ],
+    DEFAULT_VISION_MODEL,
+  );
+
+  const title =
+    typeof parsed.title === "string" && parsed.title.trim()
+      ? parsed.title.trim()
+      : "Stack graded test";
+  const questions = normalizeParsedQuestions(parsed.questions);
+  if (questions.length === 0) {
+    throw new Error("Could not detect questions on these papers. Pick a test manually or create one first.");
+  }
+  return { title, questions };
 }

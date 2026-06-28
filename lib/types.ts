@@ -131,6 +131,7 @@ export type StackAssignment = {
   pageIndex: number;
   studentId: string;
   ocrAnswers: OcrAnswer[];
+  storagePath?: string | null;
 };
 
 export type StackPerStudentResult = {
@@ -166,6 +167,14 @@ export type GradeStackJobFailure = {
 
 export type GradeStackPreviewPayload = {
   pages: StackPagePreview[];
+  discovery?: StackTestDiscovery | null;
+};
+
+export type StackTestDiscovery = {
+  source: "matched" | "created";
+  testId: string;
+  testTitle: string;
+  confidence: number;
 };
 
 export type GradeStackCommitPayload = {
@@ -191,6 +200,8 @@ export type GradeStackJob = {
 export type GradeStackPreviewJobInput = {
   storagePaths: string[];
   imageMeta: { filename: string; mimeType: string }[];
+  autoDiscover?: boolean;
+  classId?: string | null;
 };
 
 export type GradeStackCommitJobInput = {
@@ -210,4 +221,21 @@ export type OnboardingSyncResponse = {
   testId: string;
   attemptId: string;
   created: boolean;
+};
+
+export type ContentImportJobKind = "question_bank" | "test";
+
+export type ContentImportJobStatus = "queued" | "processing" | "completed" | "failed";
+
+export type ParsedImportQuestion = {
+  prompt: string;
+  correct_answer: string;
+  marks: number;
+  topic?: string | null;
+};
+
+export type ContentImportResult = {
+  questionsCreated?: number;
+  testId?: string;
+  testTitle?: string;
 };

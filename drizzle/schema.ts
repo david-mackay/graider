@@ -206,3 +206,28 @@ export const gradeStackJobs = pgTable(
   }),
 );
 
+export const contentImportJobs = pgTable(
+  "content_import_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("queued"),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    teacherId: text("teacher_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    storagePath: text("storage_path").notNull(),
+    bullmqJobId: text("bullmq_job_id"),
+    resultPayload: jsonb("result_payload"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    classIdIdx: index("content_import_jobs_class_id_idx").on(table.classId),
+    statusIdx: index("content_import_jobs_status_idx").on(table.status),
+  }),
+);
+

@@ -6,6 +6,7 @@ import { assertCanStartStackGrade, SubscriptionLimitError } from "@/lib/subscrip
 import { db } from "@/lib/db";
 import { tests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
+import { createDraftTestForAutoDiscovery } from "@/lib/stack-test-discovery";
 import {
   createGradeStackJob,
   findJobByIdempotencyKey,
@@ -32,12 +33,17 @@ export async function POST(request: NextRequest) {
     const teacher = await requireRole("teacher");
     await assertCanStartStackGrade(teacher.id);
     const form = await request.formData();
-    const testId = form.get("testId")?.toString().trim();
-    const classId = form.get("classId")?.toString().trim() ?? null;
+    const mode = form.get("mode")?.toString().trim() ?? "selected";
+    const testIdRaw = form.get("testId")?.toString().trim() ?? "";
+    const classIdRaw = form.get("classId")?.toString().trim() ?? null;
     const idempotencyKey = form.get("idempotencyKey")?.toString().trim() || null;
+    const autoDiscover = mode === "auto";
 
-    if (!testId) {
+    if (!autoDiscover && !testIdRaw) {
       return NextResponse.json({ error: "testId is required." }, { status: 400 });
+    }
+    if (autoDiscover && !classIdRaw) {
+      return NextResponse.json({ error: "classId is required for smart grading." }, { status: 400 });
     }
 
     if (idempotencyKey) {
@@ -51,17 +57,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const [test] = await db
-      .select({ id: tests.id, classId: tests.classId })
-      .from(tests)
-      .where(eq(tests.id, testId))
-      .limit(1);
+    let testId = testIdRaw;
+    let classId = classIdRaw;
 
-    if (!test) {
-      return NextResponse.json({ error: "Test not found." }, { status: 404 });
+    if (autoDiscover && classIdRaw) {
+      await requireClassAccess(classIdRaw, ["teacher"]);
+      testId = await createDraftTestForAutoDiscovery({
+        classId: classIdRaw,
+        teacherId: teacher.id,
+      });
+      classId = classIdRaw;
+    } else {
+      const [test] = await db
+        .select({ id: tests.id, classId: tests.classId })
+        .from(tests)
+        .where(eq(tests.id, testId))
+        .limit(1);
+
+      if (!test) {
+        return NextResponse.json({ error: "Test not found." }, { status: 404 });
+      }
+
+      await requireClassAccess(test.classId, ["teacher"]);
+      classId = classId ?? test.classId;
     }
-
-    await requireClassAccess(test.classId, ["teacher"]);
 
     const files = form.getAll("images");
     const fileLike = files.filter(isFileLike);
@@ -101,10 +120,15 @@ export async function POST(request: NextRequest) {
     const job = await createGradeStackJob({
       phase: "preview",
       testId,
-      classId: classId ?? test.classId,
+      classId: classId ?? null,
       teacherId: teacher.id,
       idempotencyKey,
-      inputPayload: { storagePaths, imageMeta },
+      inputPayload: {
+        storagePaths,
+        imageMeta,
+        autoDiscover,
+        classId,
+      },
     });
 
     const bullmqJobId = await enqueueStackPreviewJob(job.id);

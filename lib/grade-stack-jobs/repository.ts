@@ -85,13 +85,17 @@ export async function updateJobStatus(
     .where(eq(gradeStackJobs.id, jobId));
 }
 
-export async function completePreviewJob(jobId: string, preview: GradeStackPreviewPayload) {
-  const payload: GradeStackPreviewPayload = preview;
+export async function completePreviewJob(
+  jobId: string,
+  preview: GradeStackPreviewPayload,
+  options?: { testId?: string },
+) {
   await db
     .update(gradeStackJobs)
     .set({
       status: "needs_review",
-      previewPayload: payload,
+      previewPayload: preview,
+      ...(options?.testId ? { testId: options.testId } : {}),
       error: null,
       updatedAt: new Date(),
     })

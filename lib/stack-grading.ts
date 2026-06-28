@@ -187,13 +187,37 @@ async function fetchClassRoster(classId: string): Promise<RosterEntry[]> {
   }));
 }
 
+export async function buildStackPreviewPages(params: {
+  classId: string;
+  ocrPages: Awaited<ReturnType<typeof extractHandwrittenStack>>;
+  storagePaths: (string | null)[];
+}): Promise<StackPagePreview[]> {
+  const roster = await fetchClassRoster(params.classId);
+  const rosterIndex = buildRosterIndex(roster);
+
+  return params.ocrPages.map((page, index) => {
+    const match = matchPageToRoster(rosterIndex, page.studentNameGuess, page.confidence);
+    return {
+      pageIndex: page.pageIndex ?? index,
+      studentNameGuess: page.studentNameGuess,
+      confidence: page.confidence,
+      suggestedStudentId: match.suggestedStudentId,
+      candidates: match.candidates,
+      status: match.status,
+      ocrAnswers: page.answers,
+      storagePath: params.storagePaths[index] ?? null,
+    };
+  });
+}
+
 export async function previewStack(params: {
   testId: string;
   images: ImagePayload[];
   storagePaths: (string | null)[];
   teacherId: string;
+  ocrPages?: Awaited<ReturnType<typeof extractHandwrittenStack>>;
 }): Promise<StackPreview> {
-  const { testId, images, storagePaths } = params;
+  const { testId, images, storagePaths, ocrPages: precomputedOcrPages } = params;
 
   const [test] = await db
     .select({ id: tests.id, classId: tests.classId })
@@ -205,23 +229,12 @@ export async function previewStack(params: {
     throw new Error("TEST_NOT_FOUND");
   }
 
-  const roster = await fetchClassRoster(test.classId);
-  const rosterIndex = buildRosterIndex(roster);
+  const ocrPages = precomputedOcrPages ?? (await extractHandwrittenStack(images));
 
-  const ocrPages = await extractHandwrittenStack(images);
-
-  const pages: StackPagePreview[] = ocrPages.map((page, index) => {
-    const match = matchPageToRoster(rosterIndex, page.studentNameGuess, page.confidence);
-    return {
-      pageIndex: page.pageIndex ?? index,
-      studentNameGuess: page.studentNameGuess,
-      confidence: page.confidence,
-      suggestedStudentId: match.suggestedStudentId,
-      candidates: match.candidates,
-      status: match.status,
-      ocrAnswers: page.answers,
-      storagePath: storagePaths[index] ?? null,
-    };
+  const pages = await buildStackPreviewPages({
+    classId: test.classId,
+    ocrPages,
+    storagePaths,
   });
 
   return { pages };
@@ -287,7 +300,7 @@ export async function commitStack(params: {
   const results: StackPerStudentResult[] = [];
 
   for (const page of pages) {
-    const { studentId, ocrAnswers } = page;
+    const { studentId, ocrAnswers, storagePath } = page;
 
     // Idempotent attempt creation: same pattern as teacher-attempt.
     const [existing] = await db
@@ -320,6 +333,21 @@ export async function commitStack(params: {
       }
       attemptId = inserted.id;
       created = true;
+    }
+
+    if (storagePath) {
+      const [attemptRow] = await db
+        .select({ ocrUploads: testAttempts.ocrUploads })
+        .from(testAttempts)
+        .where(eq(testAttempts.id, attemptId))
+        .limit(1);
+      const existingUploads = attemptRow?.ocrUploads ?? [];
+      if (!existingUploads.includes(storagePath)) {
+        await db
+          .update(testAttempts)
+          .set({ ocrUploads: [...existingUploads, storagePath] })
+          .where(eq(testAttempts.id, attemptId));
+      }
     }
 
     // Match OCR answers to test_questions and upsert.

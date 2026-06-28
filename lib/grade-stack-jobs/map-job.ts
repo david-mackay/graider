@@ -67,6 +67,8 @@ export function getPreviewInput(row: GradeStackJobRow): GradeStackPreviewJobInpu
   return {
     storagePaths: Array.isArray(input?.storagePaths) ? input.storagePaths : [],
     imageMeta: Array.isArray(input?.imageMeta) ? input.imageMeta : [],
+    autoDiscover: Boolean(input?.autoDiscover),
+    classId: typeof input?.classId === "string" ? input.classId : null,
   };
 }
 
