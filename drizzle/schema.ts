@@ -6,6 +6,9 @@ export const appUsers = pgTable("app_users", {
   email: text("email"),
   fullName: text("full_name"),
   role: text("role").notNull().default("student"),
+  subscriptionTier: text("subscription_tier").notNull().default("free"),
+  subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
+  subscriptionUpdatedAt: timestamp("subscription_updated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
@@ -170,4 +173,36 @@ export const ocrBatches = pgTable("ocr_batches", {
   payload: jsonb("payload").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+export const gradeStackJobs = pgTable(
+  "grade_stack_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    phase: text("phase").notNull(),
+    status: text("status").notNull().default("queued"),
+    testId: uuid("test_id")
+      .notNull()
+      .references(() => tests.id, { onDelete: "cascade" }),
+    classId: uuid("class_id").references(() => classes.id, { onDelete: "cascade" }),
+    teacherId: text("teacher_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    previewJobId: uuid("preview_job_id"),
+    idempotencyKey: text("idempotency_key"),
+    bullmqJobId: text("bullmq_job_id"),
+    inputPayload: jsonb("input_payload").notNull().default({}),
+    previewPayload: jsonb("preview_payload"),
+    commitPayload: jsonb("commit_payload"),
+    failures: jsonb("failures").notNull().default([]),
+    error: text("error"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    testIdIdx: index("grade_stack_jobs_test_id_idx").on(table.testId),
+    statusIdx: index("grade_stack_jobs_status_idx").on(table.status),
+    idempotencyKeyUniq: unique("grade_stack_jobs_idempotency_key_uniq").on(table.idempotencyKey),
+  }),
+);
 

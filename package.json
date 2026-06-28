@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "worker:dev": "tsx worker/main.ts",
+    "worker:start": "tsx worker/main.ts",
     "lint": "eslint",
     "db:push": "npx drizzle-kit push",
     "db:generate": "npx drizzle-kit generate",
@@ -16,7 +18,9 @@
   },
   "dependencies": {
     "@clerk/nextjs": "latest",
+    "bullmq": "^5.77.6",
     "drizzle-orm": "^0.40.0",
+    "ioredis": "^5.11.0",
     "next": "16.1.6",
     "pg": "^8.14.0",
     "react": "19.2.3",
@@ -32,6 +36,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.22.3",
     "typescript": "^5"
   }
 }

@@ -146,6 +146,58 @@ export type StackPreview = { pages: StackPagePreview[] };
 
 export type StackCommitResult = { results: StackPerStudentResult[] };
 
+export type GradeStackJobPhase = "preview" | "commit";
+
+export type GradeStackJobStatus =
+  | "queued"
+  | "processing"
+  | "needs_review"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type GradeStackJobFailure = {
+  studentId?: string | null;
+  pageIndex?: number | null;
+  code: string;
+  message: string;
+  retryable: boolean;
+};
+
+export type GradeStackPreviewPayload = {
+  pages: StackPagePreview[];
+};
+
+export type GradeStackCommitPayload = {
+  results: StackPerStudentResult[];
+};
+
+export type GradeStackJob = {
+  id: string;
+  phase: GradeStackJobPhase;
+  status: GradeStackJobStatus;
+  testId: string;
+  classId: string | null;
+  attemptCount: number;
+  idempotencyKey?: string | null;
+  preview?: GradeStackPreviewPayload | null;
+  commit?: GradeStackCommitPayload | null;
+  failures: GradeStackJobFailure[];
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GradeStackPreviewJobInput = {
+  storagePaths: string[];
+  imageMeta: { filename: string; mimeType: string }[];
+};
+
+export type GradeStackCommitJobInput = {
+  assignments: StackAssignment[];
+  previewJobId: string | null;
+};
+
 export type SampleGradeResponse = {
   marksEarned: number;
   maxMarks: number;

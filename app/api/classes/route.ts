@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, requireRole } from "@/lib/auth";
+import { assertCanCreateClass, SubscriptionLimitError } from "@/lib/subscriptions/limits";
 import { db } from "@/lib/db";
 import { classes, classMemberships } from "@/drizzle/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireRole("teacher");
     const user = await getCurrentUser();
+    await assertCanCreateClass(user.id);
     const payload = (await request.json()) as Partial<{ name: string; inviteCode: string }>;
     const name = payload.name?.trim();
     if (!name) {
@@ -100,6 +102,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ class: result }, { status: 201 });
   } catch (error) {
+    if (error instanceof SubscriptionLimitError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 402 },
+      );
+    }
     const message = error instanceof Error ? error.message : "Unexpected error";
     const status = message === "UNAUTHORIZED" ? 401 : message === "FORBIDDEN" ? 403 : 500;
     return NextResponse.json({ error: message }, { status });

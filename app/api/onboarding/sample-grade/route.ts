@@ -10,8 +10,9 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
-function isFileLike(value: unknown): value is File {
-  return typeof File !== "undefined" && value instanceof File;
+/** RN multipart uploads are often parsed as Blob; File extends Blob in modern runtimes. */
+function isImageBody(value: unknown): value is Blob {
+  return typeof Blob !== "undefined" && value instanceof Blob;
 }
 
 function getClientIp(request: NextRequest): string {
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
   }
 
   const imageInput = form.get("image");
-  if (!imageInput || !isFileLike(imageInput)) {
+  if (!imageInput || !isImageBody(imageInput)) {
     return NextResponse.json({ error: "An image is required." }, { status: 400 });
   }
 
@@ -119,8 +120,12 @@ export async function POST(request: NextRequest) {
   const answerKey = answerKeyParsed.value;
 
   const buffer = Buffer.from(arrayBuffer);
+  const filename =
+    typeof File !== "undefined" && imageInput instanceof File && imageInput.name
+      ? imageInput.name
+      : "sample.png";
   const imagePayload = {
-    filename: imageInput.name || "sample.png",
+    filename,
     mimeType,
     base64: buffer.toString("base64"),
   };
