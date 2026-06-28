@@ -16,3 +16,8 @@ export async function uploadFile(
 export async function getFilePath(filePath: string): Promise<string> {
   return path.join(UPLOAD_DIR, filePath);
 }
+
+export async function readFile(filePath: string): Promise<Buffer> {
+  const fullPath = await getFilePath(filePath);
+  return fs.readFile(fullPath);
+}

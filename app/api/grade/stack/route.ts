@@ -58,6 +58,12 @@ function parseAssignments(raw: string): StackAssignment[] | null {
         question_index:
           typeof answer.question_index === "number" ? answer.question_index : null,
       })),
+      storagePath:
+        typeof record.storagePath === "string"
+          ? record.storagePath
+          : record.storagePath === null
+            ? null
+            : undefined,
     });
   }
   return assignments;

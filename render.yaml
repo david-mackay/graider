@@ -1,0 +1,41 @@
+# Render Blueprint: web API + background grade-stack worker.
+# Apply with: render blueprint sync (or create services manually from this file).
+
+services:
+  - type: web
+    name: graider-api
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - fromGroup: graider-shared
+
+  - type: worker
+    name: graider-grade-stack-worker
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm run worker:start
+    envVars:
+      - fromGroup: graider-shared
+
+envVarGroups:
+  - name: graider-shared
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: GRADE_STACK_QUEUE_NAME
+        value: grade-stack
+      - key: GRADE_STACK_QUEUE_PREFIX
+        value: graider
+      - key: GRADE_STACK_WORKER_CONCURRENCY
+        value: "2"
+      - key: WORKER_HEALTH_PORT
+        value: "10000"

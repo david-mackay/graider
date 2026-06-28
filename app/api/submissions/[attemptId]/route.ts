@@ -32,6 +32,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
         status: testAttempts.status,
         totalMarks: testAttempts.totalMarks,
         maxMarks: testAttempts.maxMarks,
+        ocrUploads: testAttempts.ocrUploads,
       })
       .from(testAttempts)
       .where(eq(testAttempts.id, attemptId))
@@ -123,6 +124,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
         total_marks: attempt.totalMarks,
         max_marks: attempt.maxMarks,
         test_class_id: test.classId,
+        ocr_uploads: attempt.ocrUploads ?? [],
         questions,
       },
     });
