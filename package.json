@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "worker:dev": "tsx --env-file=.env.local worker/main.ts",
-    "worker:start": "tsx --env-file=.env.local worker/main.ts",
+    "worker:start": "tsx worker/main.ts",
     "lint": "eslint",
     "db:push": "npx drizzle-kit push",
     "db:generate": "npx drizzle-kit generate",
