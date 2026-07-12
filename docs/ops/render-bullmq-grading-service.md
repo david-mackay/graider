@@ -4,11 +4,13 @@
 
 | Service | Render type | Start command |
 |---------|-------------|---------------|
-| Next.js API | Web | `npm run start` |
+| Next.js API (optional) | Web | `npm run start` |
 | Grade stack worker | Background Worker | `npm run worker:start` |
-| Redis | Render Redis | (managed) |
+| Redis | Render Redis / Key Value | (managed, `noeviction`) |
 
-Deploy both app services from this repo. Attach the same **environment group** so `DATABASE_URL`, `REDIS_URL`, `OPENROUTER_*`, and `UPLOAD_DIR` match.
+Typical production topology: **Vercel** hosts the Next.js API; **Render** runs only the background worker + Redis. Attach the same env values on Vercel and the worker: `DATABASE_URL`, `REDIS_URL`, `OPENROUTER_*`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and optional `EXPO_ACCESS_TOKEN`.
+
+`EXPO_ACCESS_TOKEN` (from [expo.dev](https://expo.dev) → Account → Access tokens) is optional but recommended so the worker can send push notifications when grading jobs finish.
 
 ## Worker entrypoint
 
@@ -18,9 +20,9 @@ Deploy both app services from this repo. Attach the same **environment group** s
 
 ## Upload storage
 
-Stack images are written under `UPLOAD_DIR` by the API (`POST /api/grade-stack/jobs/preview`). The worker reads the same paths when processing `stack_preview` jobs.
+Uploads use **Supabase Storage** (`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, bucket `SUPABASE_TEST_UPLOAD_BUCKET` / `test-uploads`) so the Vercel API and Render worker share the same objects.
 
-On Render, mount a **persistent disk** at `/var/data/uploads` on **both** the web and worker services (see `render.yaml`), or migrate to shared object storage.
+Create a private bucket named `test-uploads` (or match your env). Locally, if Supabase env is unset, files fall back to `UPLOAD_DIR`.
 
 ## Queue
 
@@ -32,7 +34,7 @@ On Render, mount a **persistent disk** at `/var/data/uploads` on **both** the we
 
 ```bash
 docker compose up -d          # Postgres + Redis
-npm run db:push               # includes grade_stack_jobs table
+npm run db:push               # includes grade_stack_jobs + push_tokens tables
 npm run dev                   # API on :3000
 npm run worker:dev            # worker in second terminal
 ```

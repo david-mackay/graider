@@ -76,6 +76,8 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
       .set({
         marksEarned: row.marksEarned,
         feedback: row.feedback,
+        gradedBy: "ai",
+        updatedAt: new Date(),
       })
       .where(eq(attemptAnswers.id, row.id));
   }

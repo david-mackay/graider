@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, classMemberships } from "@/drizzle/schema";
+import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, classMemberships, appUsers } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
 
 type Params = { attemptId: string };
@@ -14,6 +14,8 @@ type AttemptQuestionDetail = {
   marks: number;
   marks_earned: number | null;
   feedback: string | null;
+  graded_by: string | null;
+  updated_at: string | null;
 };
 
 export async function GET(_request: Request, { params }: RouteContext) {
@@ -33,6 +35,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
         totalMarks: testAttempts.totalMarks,
         maxMarks: testAttempts.maxMarks,
         ocrUploads: testAttempts.ocrUploads,
+        gradedAt: testAttempts.gradedAt,
+        updatedAt: testAttempts.updatedAt,
       })
       .from(testAttempts)
       .where(eq(testAttempts.id, attemptId))
@@ -94,6 +98,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
         studentAnswer: attemptAnswers.studentAnswer,
         marksEarned: attemptAnswers.marksEarned,
         feedback: attemptAnswers.feedback,
+        gradedBy: attemptAnswers.gradedBy,
+        updatedAt: attemptAnswers.updatedAt,
       })
       .from(attemptAnswers)
       .where(eq(attemptAnswers.attemptId, attemptId));
@@ -101,6 +107,16 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const answerByQuestion = new Map(answerRows.map((row) => [row.questionId, row]));
 
     const stripFeedback = !isTeacher && !test.showAiFeedback;
+
+    let studentName: string | null = null;
+    if (isTeacher) {
+      const [student] = await db
+        .select({ fullName: appUsers.fullName, email: appUsers.email })
+        .from(appUsers)
+        .where(eq(appUsers.id, attempt.studentId))
+        .limit(1);
+      studentName = student?.fullName?.trim() || student?.email?.trim() || null;
+    }
 
     const questions: AttemptQuestionDetail[] = tqRows.map((question) => {
       const answer = answerByQuestion.get(question.questionId);
@@ -111,6 +127,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
         marks: question.marks ?? 0,
         marks_earned: answer?.marksEarned ?? null,
         feedback: stripFeedback ? null : (answer?.feedback ?? null),
+        graded_by: isTeacher ? (answer?.gradedBy ?? null) : null,
+        updated_at: answer?.updatedAt?.toISOString() ?? null,
       };
     });
 
@@ -120,9 +138,12 @@ export async function GET(_request: Request, { params }: RouteContext) {
         test_id: attempt.testId,
         test_title: test.title,
         student_id: attempt.studentId,
+        student_name: studentName,
         status: attempt.status,
         total_marks: attempt.totalMarks,
         max_marks: attempt.maxMarks,
+        graded_at: attempt.gradedAt?.toISOString() ?? null,
+        updated_at: attempt.updatedAt?.toISOString() ?? null,
         test_class_id: test.classId,
         ocr_uploads: attempt.ocrUploads ?? [],
         questions,

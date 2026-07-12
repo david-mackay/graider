@@ -177,6 +177,98 @@ export async function extractHandwrittenAnswers(
     .filter((entry): entry is OcrAnswer => Boolean(entry && entry.question && entry.answer));
 }
 
+type ImagePayload = { filename: string; mimeType: string; base64: string };
+
+/** OCR one student's pages — Q/A only, no name extraction. */
+export async function extractHandwrittenStudentBucket(
+  images: ImagePayload[],
+  globalPageIndices: number[],
+): Promise<OcrPage[]> {
+  if (images.length === 0) return [];
+
+  const imageParts = images.map((entry) => ({
+    type: "image_url" as const,
+    image_url: { url: `data:${entry.mimeType};base64,${entry.base64}` },
+  }));
+
+  const indexList = globalPageIndices.join(", ");
+  const textPrompt = {
+    type: "text" as const,
+    text:
+      `You are reading ${images.length} photographed page${images.length === 1 ? "" : "s"} from ONE student's handwritten test. ` +
+      "The teacher already assigned this student — do NOT read or guess any student name. " +
+      `Pages are in order; use these global pageIndex values exactly: ${indexList}. ` +
+      "For each page extract every question prompt and the student's handwritten answer. " +
+      "Return strict JSON: " +
+      `{"pages":[{"pageIndex":${globalPageIndices[0] ?? 0},"answers":[{"question":"...","answer":"...","question_index":0}]}]}. ` +
+      "Include exactly one pages entry per image, in order.",
+  };
+
+  const parsed = await callOpenRouter(
+    [
+      {
+        role: "system",
+        content:
+          "You extract handwritten exam Q/A pairs from photos. Output strict JSON only. Never extract student names.",
+      },
+      { role: "user", content: [textPrompt, ...imageParts] },
+    ],
+    DEFAULT_VISION_MODEL,
+  );
+
+  const rawPages = (parsed as Record<string, unknown>).pages;
+  const pageEntries = Array.isArray(rawPages) ? rawPages : [];
+
+  return images.map((_image, index): OcrPage => {
+    const globalIndex = globalPageIndices[index] ?? index;
+    const candidate = pageEntries[index];
+    if (typeof candidate !== "object" || candidate === null) {
+      return { pageIndex: globalIndex, studentNameGuess: "", confidence: 0, answers: [] };
+    }
+    const record = candidate as Record<string, unknown>;
+    const rawAnswers = record.answers;
+    const answers = Array.isArray(rawAnswers)
+      ? (rawAnswers as unknown[])
+          .map((entry) => coerceAnswerEntry(entry))
+          .filter((entry): entry is OcrAnswer => entry !== null)
+      : [];
+    return { pageIndex: globalIndex, studentNameGuess: "", confidence: 0, answers };
+  });
+}
+
+/** One vision call per student bucket; skips name OCR entirely. */
+export async function extractStudentFirstPreview(
+  images: ImagePayload[],
+  assignments: { pageIndex: number; studentId: string }[],
+): Promise<OcrPage[]> {
+  if (images.length === 0) return [];
+
+  const byStudent = new Map<string, number[]>();
+  for (const assignment of [...assignments].sort((a, b) => a.pageIndex - b.pageIndex)) {
+    const list = byStudent.get(assignment.studentId) ?? [];
+    list.push(assignment.pageIndex);
+    byStudent.set(assignment.studentId, list);
+  }
+
+  const pageResults = new Map<number, OcrPage>();
+  for (const pageIndices of byStudent.values()) {
+    const studentImages = pageIndices.map((index) => images[index]);
+    const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices);
+    for (const page of pages) {
+      pageResults.set(page.pageIndex, page);
+    }
+  }
+
+  return images.map((_image, index) =>
+    pageResults.get(index) ?? {
+      pageIndex: index,
+      studentNameGuess: "",
+      confidence: 0,
+      answers: [],
+    },
+  );
+}
+
 function coerceAnswerEntry(entry: unknown): OcrAnswer | null {
   if (typeof entry !== "object" || entry === null) {
     return null;
@@ -363,8 +455,7 @@ export async function parseTestFromStackImages(
     throw new Error("At least one image is required to detect a test.");
   }
 
-  const sample = images.slice(0, 3);
-  const imageParts = sample.map((entry) => ({
+  const imageParts = images.map((entry) => ({
     type: "image_url" as const,
     image_url: {
       url: `data:${entry.mimeType};base64,${entry.base64}`,
@@ -384,12 +475,13 @@ export async function parseTestFromStackImages(
           {
             type: "text",
             text:
-              "These photos are handwritten student test papers from the same assessment. " +
+              "These photos are handwritten student test papers from the same assessment (all pages provided). " +
               "Extract the test title (from a header if visible, otherwise infer a short descriptive title) " +
-              "and every question prompt shown on the papers. " +
+              "and every question prompt shown across the pages. " +
               "For each question, provide a model correct_answer a teacher would use to grade responses " +
               "(infer from the question when no answer key is visible). " +
-              "Assign reasonable integer marks per question (default 1–5 based on complexity). " +
+              "When point values or marks are printed on the paper (e.g. '(2 marks)', '[3 pts]'), use those exact values. " +
+              "Only infer marks when none are visible on the page. " +
               "Return JSON: {\"title\":\"...\",\"questions\":[{\"prompt\":\"...\",\"correct_answer\":\"...\",\"marks\":2,\"topic\":\"...\"}]}",
           },
           ...imageParts,

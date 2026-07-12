@@ -198,7 +198,7 @@ export async function discoverOrCreateTestForStack(params: {
   draftTestId: string;
   ocrPages: OcrPage[];
   images: ImagePayload[];
-}): Promise<StackTestDiscovery> {
+}): Promise<{ discovery: StackTestDiscovery; draftTestIdToDelete: string | null }> {
   const match = await findBestMatchingTest({
     classId: params.classId,
     teacherId: params.teacherId,
@@ -206,14 +206,14 @@ export async function discoverOrCreateTestForStack(params: {
   });
 
   if (match) {
-    if (match.testId !== params.draftTestId) {
-      await deleteDraftTestIfUnused(params.draftTestId);
-    }
     return {
-      source: "matched",
-      testId: match.testId,
-      testTitle: match.testTitle,
-      confidence: match.score,
+      discovery: {
+        source: "matched",
+        testId: match.testId,
+        testTitle: match.testTitle,
+        confidence: match.score,
+      },
+      draftTestIdToDelete: match.testId !== params.draftTestId ? params.draftTestId : null,
     };
   }
 
@@ -227,9 +227,12 @@ export async function discoverOrCreateTestForStack(params: {
   });
 
   return {
-    source: "created",
-    testId: params.draftTestId,
-    testTitle: parsed.title,
-    confidence: 1,
+    discovery: {
+      source: "created",
+      testId: params.draftTestId,
+      testTitle: parsed.title,
+      confidence: 1,
+    },
+    draftTestIdToDelete: null,
   };
 }

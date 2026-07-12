@@ -168,6 +168,13 @@ export type GradeStackJobFailure = {
 export type GradeStackPreviewPayload = {
   pages: StackPagePreview[];
   discovery?: StackTestDiscovery | null;
+  /** Pre-assigned student per page (student-first mobile flow). */
+  studentPageAssignments?: StudentPageAssignment[];
+};
+
+export type StudentPageAssignment = {
+  pageIndex: number;
+  studentId: string;
 };
 
 export type StackTestDiscovery = {
@@ -177,8 +184,15 @@ export type StackTestDiscovery = {
   confidence: number;
 };
 
+export type GradeStackCommitProgress = {
+  total: number;
+  completed: number;
+  currentStudentId?: string | null;
+};
+
 export type GradeStackCommitPayload = {
   results: StackPerStudentResult[];
+  progress?: GradeStackCommitProgress;
 };
 
 export type GradeStackJob = {
@@ -191,6 +205,8 @@ export type GradeStackJob = {
   idempotencyKey?: string | null;
   preview?: GradeStackPreviewPayload | null;
   commit?: GradeStackCommitPayload | null;
+  /** From preview job input — lets mobile resume student-first review after a push tap. */
+  studentPageAssignments?: StudentPageAssignment[];
   failures: GradeStackJobFailure[];
   error: string | null;
   createdAt: string;
@@ -202,6 +218,8 @@ export type GradeStackPreviewJobInput = {
   imageMeta: { filename: string; mimeType: string }[];
   autoDiscover?: boolean;
   classId?: string | null;
+  studentPageAssignments?: StudentPageAssignment[];
+  gradingMode?: "student_first" | "stack";
 };
 
 export type GradeStackCommitJobInput = {

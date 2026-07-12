@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole, getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tests, testAttempts, testQuestions, attemptAnswers, classMemberships } from "@/drizzle/schema";
+import { tests, testAttempts, testQuestions, attemptAnswers, classMemberships, appUsers } from "@/drizzle/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { TestAttempt } from "@/lib/types";
 
@@ -9,6 +9,12 @@ type SubmitPayload = {
   testId?: string;
   answers?: { question_id: string; answer: string }[];
 };
+
+function displayStudentName(fullName: string | null | undefined, email: string | null | undefined): string | null {
+  if (fullName?.trim()) return fullName.trim();
+  if (email?.trim()) return email.trim();
+  return null;
+}
 
 export async function GET() {
   try {
@@ -66,6 +72,19 @@ export async function GET() {
     const testReleasedMap = new Map(testRows.map((row) => [row.id, row.gradesReleased]));
     const isStudent = user.role !== "teacher";
 
+    const studentIds = Array.from(new Set(attempts.map((attempt) => attempt.studentId)));
+    const studentNameById = new Map<string, string>();
+    if (!isStudent && studentIds.length > 0) {
+      const students = await db
+        .select({ id: appUsers.id, fullName: appUsers.fullName, email: appUsers.email })
+        .from(appUsers)
+        .where(inArray(appUsers.id, studentIds));
+      for (const student of students) {
+        const label = displayStudentName(student.fullName, student.email);
+        if (label) studentNameById.set(student.id, label);
+      }
+    }
+
     const normalized = attempts.map((attempt) => {
       const released = testReleasedMap.get(attempt.testId) ?? false;
       const hideGrade = isStudent && attempt.status === "graded" && !released;
@@ -73,6 +92,7 @@ export async function GET() {
         id: attempt.id,
         test_id: attempt.testId,
         student_id: attempt.studentId,
+        student_name: isStudent ? null : (studentNameById.get(attempt.studentId) ?? null),
         status: hideGrade ? "submitted" : attempt.status,
         total_marks: hideGrade ? null : attempt.totalMarks,
         max_marks: hideGrade ? null : attempt.maxMarks,
