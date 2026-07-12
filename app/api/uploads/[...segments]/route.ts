@@ -1,22 +1,64 @@
 import { NextResponse } from "next/server";
 import path from "path";
-import { requireRole, requireClassAccess } from "@/lib/auth";
+import { getCurrentUser, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tests } from "@/drizzle/schema";
+import { gradeStackJobs, tests } from "@/drizzle/schema";
 import { readFile } from "@/lib/storage";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 
 function resolveContentType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".png") return "image/png";
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".webp") return "image/webp";
+  if (ext === ".heic" || ext === ".heif") return "image/heif";
   if (ext === ".pdf") return "application/pdf";
   return "application/octet-stream";
+}
+
+async function authorizeStackPreviewUpload(storagePath: string, uploadKey: string) {
+  const [test] = await db
+    .select({ classId: tests.classId })
+    .from(tests)
+    .where(eq(tests.id, uploadKey))
+    .limit(1);
+
+  if (test) {
+    await requireClassAccess(test.classId, ["teacher"]);
+    return;
+  }
+
+  const user = await getCurrentUser();
+  const [jobByTest] = await db
+    .select({ classId: gradeStackJobs.classId })
+    .from(gradeStackJobs)
+    .where(and(eq(gradeStackJobs.testId, uploadKey), eq(gradeStackJobs.teacherId, user.id)))
+    .limit(1);
+
+  if (jobByTest?.classId) {
+    await requireClassAccess(jobByTest.classId, ["teacher"]);
+    return;
+  }
+
+  const [jobByPath] = await db
+    .select({ classId: gradeStackJobs.classId })
+    .from(gradeStackJobs)
+    .where(
+      and(
+        eq(gradeStackJobs.teacherId, user.id),
+        sql`${gradeStackJobs.inputPayload}->'storagePaths' @> ${JSON.stringify([storagePath])}::jsonb`,
+      ),
+    )
+    .limit(1);
+
+  if (jobByPath?.classId) {
+    await requireClassAccess(jobByPath.classId, ["teacher"]);
+    return;
+  }
+
+  throw new Error("FORBIDDEN");
 }
 
 async function assertTeacherCanReadUpload(storagePath: string) {
@@ -27,14 +69,7 @@ async function assertTeacherCanReadUpload(storagePath: string) {
 
   const stackMatch = normalized.match(/^stack-preview\/([^/]+)\//);
   if (stackMatch) {
-    const testId = stackMatch[1];
-    const [test] = await db
-      .select({ classId: tests.classId })
-      .from(tests)
-      .where(eq(tests.id, testId))
-      .limit(1);
-    if (!test) throw new Error("FORBIDDEN");
-    await requireClassAccess(test.classId, ["teacher"]);
+    await authorizeStackPreviewUpload(normalized, stackMatch[1]);
     return;
   }
 
@@ -52,19 +87,17 @@ type RouteContext = { params: Params | Promise<Params> };
 
 export async function GET(_request: Request, { params }: RouteContext) {
   try {
-    const teacher = await requireRole("teacher");
+    await getCurrentUser();
     const { segments } = await params;
     if (!segments?.length) {
       return NextResponse.json({ error: "File path is required." }, { status: 400 });
     }
 
     const storagePath = segments.join("/");
-    await assertTeacherCanReadUpload(storagePath);
-
-    const fullPath = path.join(UPLOAD_DIR, storagePath);
-    if (!fullPath.startsWith(path.resolve(UPLOAD_DIR))) {
+    if (storagePath.includes("..")) {
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
+    await assertTeacherCanReadUpload(storagePath);
 
     const buffer = await readFile(storagePath);
     return new NextResponse(new Uint8Array(buffer), {

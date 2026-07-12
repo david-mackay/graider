@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     if (idempotencyKey) {
       const existing = await findJobByIdempotencyKey(idempotencyKey);
-      if (existing) {
+      if (existing && existing.status !== "failed" && existing.status !== "cancelled") {
         const mapped = mapGradeStackJobRow(existing);
         return NextResponse.json(
           { jobId: mapped.id, phase: mapped.phase, status: mapped.status },

@@ -19,6 +19,7 @@ import {
   StackPagePreview,
   StackPerStudentResult,
   StackPreview,
+  type GradeStackCommitPayload,
 } from "@/lib/types";
 
 /**
@@ -210,6 +211,32 @@ export async function buildStackPreviewPages(params: {
   });
 }
 
+/** Student-first flow: pages are pre-assigned — no roster name matching. */
+export function buildStudentFirstPreviewPages(params: {
+  ocrPages: Awaited<ReturnType<typeof extractHandwrittenStack>>;
+  storagePaths: (string | null)[];
+}): StackPagePreview[] {
+  return params.ocrPages.map((page, index) => ({
+    pageIndex: page.pageIndex ?? index,
+    studentNameGuess: "",
+    confidence: 0,
+    suggestedStudentId: null,
+    candidates: [],
+    status: "exact" as const,
+    ocrAnswers: page.answers,
+    storagePath: params.storagePaths[page.pageIndex ?? index] ?? null,
+  }));
+}
+
+export function firstStudentPageIndices(
+  assignments: { pageIndex: number; studentId: string }[],
+): number[] {
+  if (assignments.length === 0) return [];
+  const sorted = [...assignments].sort((a, b) => a.pageIndex - b.pageIndex);
+  const firstStudentId = sorted[0].studentId;
+  return sorted.filter((a) => a.studentId === firstStudentId).map((a) => a.pageIndex);
+}
+
 export async function previewStack(params: {
   testId: string;
   images: ImagePayload[];
@@ -244,8 +271,9 @@ export async function commitStack(params: {
   testId: string;
   pages: StackAssignment[];
   teacherId: string;
+  onProgress?: (payload: GradeStackCommitPayload) => Promise<void>;
 }): Promise<StackCommitResult> {
-  const { testId, pages } = params;
+  const { testId, pages, onProgress } = params;
 
   const [test] = await db
     .select({ id: tests.id, classId: tests.classId })
@@ -297,10 +325,38 @@ export async function commitStack(params: {
     questionByNormalizedPrompt.set(normalizeQuestion(row.qbId), row.questionId);
   }
 
-  const results: StackPerStudentResult[] = [];
-
+  // Group pages by student so multi-page submissions grade once per student.
+  const pagesByStudent = new Map<
+    string,
+    { ocrAnswers: OcrAnswer[]; storagePaths: string[] }
+  >();
   for (const page of pages) {
-    const { studentId, ocrAnswers, storagePath } = page;
+    const existing = pagesByStudent.get(page.studentId) ?? {
+      ocrAnswers: [],
+      storagePaths: [],
+    };
+    existing.ocrAnswers.push(...page.ocrAnswers);
+    if (page.storagePath) existing.storagePaths.push(page.storagePath);
+    pagesByStudent.set(page.studentId, existing);
+  }
+
+  const results: StackPerStudentResult[] = [];
+  const totalStudents = pagesByStudent.size;
+
+  const reportProgress = async (currentStudentId: string | null) => {
+    if (!onProgress) return;
+    await onProgress({
+      results: [...results],
+      progress: {
+        total: totalStudents,
+        completed: results.length,
+        currentStudentId,
+      },
+    });
+  };
+
+  for (const [studentId, studentPages] of pagesByStudent) {
+    await reportProgress(studentId);
 
     // Idempotent attempt creation: same pattern as teacher-attempt.
     const [existing] = await db
@@ -335,24 +391,28 @@ export async function commitStack(params: {
       created = true;
     }
 
-    if (storagePath) {
+    if (studentPages.storagePaths.length > 0) {
       const [attemptRow] = await db
         .select({ ocrUploads: testAttempts.ocrUploads })
         .from(testAttempts)
         .where(eq(testAttempts.id, attemptId))
         .limit(1);
       const existingUploads = attemptRow?.ocrUploads ?? [];
-      if (!existingUploads.includes(storagePath)) {
+      const merged = [...existingUploads];
+      for (const path of studentPages.storagePaths) {
+        if (!merged.includes(path)) merged.push(path);
+      }
+      if (merged.length !== existingUploads.length) {
         await db
           .update(testAttempts)
-          .set({ ocrUploads: [...existingUploads, storagePath] })
+          .set({ ocrUploads: merged })
           .where(eq(testAttempts.id, attemptId));
       }
     }
 
-    // Match OCR answers to test_questions and upsert.
+    // Match OCR answers to test_questions and upsert (all pages for this student).
     const matchRows: { questionId: string; studentAnswer: string }[] = [];
-    for (const extracted of ocrAnswers) {
+    for (const extracted of studentPages.ocrAnswers) {
       const match = questionByNormalizedPrompt.get(normalizeQuestion(extracted.question));
       if (!match) continue;
       matchRows.push({ questionId: match, studentAnswer: extracted.answer });
@@ -387,6 +447,8 @@ export async function commitStack(params: {
       })),
     });
   }
+
+  await reportProgress(null);
 
   return { results };
 }

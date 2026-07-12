@@ -14,13 +14,34 @@ import {
 } from "@/lib/grade-stack-jobs/repository";
 import { enqueueStackPreviewJob } from "@/lib/grade-stack-jobs/queue";
 import { mapGradeStackJobRow } from "@/lib/grade-stack-jobs/map-job";
+import type { StudentPageAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-const MAX_IMAGES_PER_REQUEST = 10;
+/** Student-first mobile sessions may include many pages across multiple students. */
+const MAX_IMAGES_PER_REQUEST = 30;
 
 function isFileLike(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
+}
+
+function parseStudentPageAssignments(raw: string | null): StudentPageAssignment[] | undefined {
+  if (!raw?.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return undefined;
+    const assignments: StudentPageAssignment[] = [];
+    for (const entry of parsed) {
+      if (typeof entry !== "object" || entry === null) return undefined;
+      const record = entry as Record<string, unknown>;
+      if (typeof record.pageIndex !== "number" || !Number.isFinite(record.pageIndex)) return undefined;
+      if (typeof record.studentId !== "string" || !record.studentId.trim()) return undefined;
+      assignments.push({ pageIndex: record.pageIndex, studentId: record.studentId.trim() });
+    }
+    return assignments.length > 0 ? assignments : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizeImageName(fileName: string | undefined) {
@@ -38,6 +59,14 @@ export async function POST(request: NextRequest) {
     const classIdRaw = form.get("classId")?.toString().trim() ?? null;
     const idempotencyKey = form.get("idempotencyKey")?.toString().trim() || null;
     const autoDiscover = mode === "auto";
+    const gradingModeRaw = form.get("gradingMode")?.toString().trim();
+    const studentPageAssignments = parseStudentPageAssignments(
+      form.get("studentPageAssignments")?.toString() ?? null,
+    );
+    const gradingMode =
+      gradingModeRaw === "student_first" || studentPageAssignments?.length
+        ? "student_first"
+        : "stack";
 
     if (!autoDiscover && !testIdRaw) {
       return NextResponse.json({ error: "testId is required." }, { status: 400 });
@@ -48,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     if (idempotencyKey) {
       const existing = await findJobByIdempotencyKey(idempotencyKey);
-      if (existing) {
+      if (existing && existing.status !== "failed" && existing.status !== "cancelled") {
         const mapped = mapGradeStackJobRow(existing);
         return NextResponse.json(
           { jobId: mapped.id, phase: mapped.phase, status: mapped.status },
@@ -128,6 +157,8 @@ export async function POST(request: NextRequest) {
         imageMeta,
         autoDiscover,
         classId,
+        studentPageAssignments,
+        gradingMode,
       },
     });
 

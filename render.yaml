@@ -29,8 +29,12 @@ envVarGroups:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
-      - key: UPLOAD_DIR
-        value: /var/data/uploads
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_TEST_UPLOAD_BUCKET
+        value: test-uploads
       - key: GRADE_STACK_QUEUE_NAME
         value: grade-stack
       - key: GRADE_STACK_QUEUE_PREFIX
@@ -39,3 +43,5 @@ envVarGroups:
         value: "2"
       - key: WORKER_HEALTH_PORT
         value: "10000"
+      - key: EXPO_ACCESS_TOKEN
+        sync: false

@@ -44,6 +44,10 @@ function asFailures(value: unknown): GradeStackJobFailure[] {
 export function mapGradeStackJobRow(row: GradeStackJobRow): GradeStackJob {
   const preview = row.previewPayload as GradeStackPreviewPayload | null;
   const commit = row.commitPayload as GradeStackCommitPayload | null;
+  const input = row.inputPayload as GradeStackPreviewJobInput | null;
+  const studentPageAssignments =
+    preview?.studentPageAssignments ??
+    (Array.isArray(input?.studentPageAssignments) ? input.studentPageAssignments : undefined);
 
   return {
     id: row.id,
@@ -55,6 +59,7 @@ export function mapGradeStackJobRow(row: GradeStackJobRow): GradeStackJob {
     idempotencyKey: row.idempotencyKey,
     preview: preview ?? null,
     commit: commit ?? null,
+    studentPageAssignments,
     failures: asFailures(row.failures),
     error: row.error,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
@@ -69,6 +74,10 @@ export function getPreviewInput(row: GradeStackJobRow): GradeStackPreviewJobInpu
     imageMeta: Array.isArray(input?.imageMeta) ? input.imageMeta : [],
     autoDiscover: Boolean(input?.autoDiscover),
     classId: typeof input?.classId === "string" ? input.classId : null,
+    studentPageAssignments: Array.isArray(input?.studentPageAssignments)
+      ? input.studentPageAssignments
+      : undefined,
+    gradingMode: input?.gradingMode === "student_first" ? "student_first" : "stack",
   };
 }
 

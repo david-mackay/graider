@@ -154,6 +154,7 @@ export const attemptAnswers = pgTable(
     studentAnswer: text("student_answer").notNull(),
     marksEarned: integer("marks_earned"),
     feedback: text("feedback"),
+    gradedBy: text("graded_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -228,6 +229,24 @@ export const contentImportJobs = pgTable(
   (table) => ({
     classIdIdx: index("content_import_jobs_class_id_idx").on(table.classId),
     statusIdx: index("content_import_jobs_status_idx").on(table.status),
+  }),
+);
+
+export const pushTokens = pgTable(
+  "push_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    expoPushToken: text("expo_push_token").notNull(),
+    platform: text("platform"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    expoPushTokenUniq: unique("push_tokens_expo_push_token_uniq").on(table.expoPushToken),
+    userIdIdx: index("push_tokens_user_id_idx").on(table.userId),
   }),
 );
 

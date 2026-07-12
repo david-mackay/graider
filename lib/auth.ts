@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { AppRole, AppUser, ClassMembership, ClassRole } from "@/lib/types";
 import { db } from "@/lib/db";
-import { appUsers, classMemberships } from "@/drizzle/schema";
+import { appUsers, classMemberships, classes } from "@/drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
 function toAppRole(value: string | undefined): AppRole {
@@ -98,6 +98,16 @@ export async function setUserRole(role: AppRole): Promise<AppUser> {
 
 export async function getClassRole(classId: string): Promise<ClassRole | null> {
   const user = await getCurrentUser();
+
+  const [classRow] = await db
+    .select({ ownerUserId: classes.ownerUserId })
+    .from(classes)
+    .where(eq(classes.id, classId))
+    .limit(1);
+
+  if (classRow?.ownerUserId === user.id) {
+    return "teacher";
+  }
 
   const [data] = await db
     .select({ role: classMemberships.role })

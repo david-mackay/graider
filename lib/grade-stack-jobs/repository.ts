@@ -102,6 +102,17 @@ export async function completePreviewJob(
     .where(eq(gradeStackJobs.id, jobId));
 }
 
+export async function updateCommitProgress(jobId: string, commit: GradeStackCommitPayload) {
+  await db
+    .update(gradeStackJobs)
+    .set({
+      status: "processing",
+      commitPayload: commit,
+      updatedAt: new Date(),
+    })
+    .where(eq(gradeStackJobs.id, jobId));
+}
+
 export async function completeCommitJob(jobId: string, commit: GradeStackCommitPayload) {
   await db
     .update(gradeStackJobs)
