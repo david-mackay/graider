@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { SignInButton } from "@clerk/nextjs";
+import ClerkSignInButton from "@/components/shared/ClerkSignInButton";
 import VaultResumeGate from "@/components/marketing/VaultResumeGate";
 
 /** A miniature marked paper, built in CSS — the hero's visual anchor. */
@@ -87,14 +87,14 @@ export default function LandingPage() {
               >
                 Grade a sample paper
               </Link>
-              <SignInButton mode="modal">
+              <ClerkSignInButton mode="modal">
                 <button
                   type="button"
                   className="cursor-pointer text-sm font-bold text-ink-soft underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-pen"
                 >
                   I already have an account
                 </button>
-              </SignInButton>
+              </ClerkSignInButton>
             </div>
             <p className="mt-4 text-xs text-ink-faint">
               Free to try — no card, no setup, two minutes.

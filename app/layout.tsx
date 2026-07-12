@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Caveat, Fraunces, Nunito } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import { hasClerkPublishableKey } from "@/lib/clerk-config";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -30,15 +31,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <ClerkProvider>
-      <html lang="en" className="h-full">
-        <body
-          className={`${fraunces.variable} ${nunito.variable} ${caveat.variable} font-sans antialiased h-full`}
-        >
-          {children}
-        </body>
-      </html>
-    </ClerkProvider>
+  const body = (
+    <html lang="en" className="h-full">
+      <body
+        className={`${fraunces.variable} ${nunito.variable} ${caveat.variable} font-sans antialiased h-full`}
+      >
+        {children}
+      </body>
+    </html>
   );
+
+  // Allow CI/static builds without Clerk keys; set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  // (and CLERK_SECRET_KEY) in Vercel/Render for real auth.
+  if (!hasClerkPublishableKey()) {
+    return body;
+  }
+
+  return <ClerkProvider>{body}</ClerkProvider>;
 }

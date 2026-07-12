@@ -4,6 +4,8 @@ import { UserButton } from "@clerk/nextjs";
 import { getCurrentUser } from "@/lib/auth";
 import AppHeader from "@/components/shared/AppHeader";
 
+export const dynamic = "force-dynamic";
+
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.userId) {

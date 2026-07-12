@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SignInButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
+import ClerkSignInButton from "@/components/shared/ClerkSignInButton";
 import { Card } from "@/components/shared/ui";
 import { getResumeStep, getVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
@@ -72,7 +72,7 @@ export default function OnboardingSavePage() {
         </Card>
 
         <div className="pt-2">
-          <SignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
+          <ClerkSignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
             <button
               type="button"
               onClick={() => fireEvent(ONBOARDING_EVENTS.AUTH_STARTED)}
@@ -80,10 +80,10 @@ export default function OnboardingSavePage() {
             >
               Save my progress &mdash; sign up free
             </button>
-          </SignInButton>
+          </ClerkSignInButton>
           <p className="mt-3 text-center text-xs text-ink-faint">
             Already have an account?{" "}
-            <SignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
+            <ClerkSignInButton mode="modal" fallbackRedirectUrl="/onboarding-sync">
               <button
                 type="button"
                 onClick={() => fireEvent(ONBOARDING_EVENTS.AUTH_STARTED)}
@@ -91,7 +91,7 @@ export default function OnboardingSavePage() {
               >
                 Sign in
               </button>
-            </SignInButton>
+            </ClerkSignInButton>
           </p>
         </div>
       </div>
