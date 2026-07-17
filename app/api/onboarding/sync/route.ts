@@ -14,6 +14,7 @@ import {
 } from "@/drizzle/schema";
 import {
   ONBOARDING_VAULT_VERSION,
+  normalizeAnswerKeys,
   type OnboardingVault,
 } from "@/lib/onboarding/types";
 import { type OnboardingSyncResponse } from "@/lib/types";
@@ -30,11 +31,8 @@ function isValidVault(input: unknown): input is OnboardingVault {
   const vault = input as Partial<OnboardingVault>;
   if (vault.schemaVersion !== ONBOARDING_VAULT_VERSION) return false;
   if (typeof vault.startedAt !== "string" || vault.startedAt.length === 0) return false;
-  if (!vault.answerKey) return false;
-  const { prompt, correctAnswer, marks } = vault.answerKey;
-  if (typeof prompt !== "string" || prompt.trim().length === 0) return false;
-  if (typeof correctAnswer !== "string" || correctAnswer.trim().length === 0) return false;
-  if (!Number.isInteger(marks) || marks <= 0) return false;
+  const keys = normalizeAnswerKeys(vault);
+  if (keys.length === 0) return false;
   if (!vault.sampleGrade) return false;
   const { marksEarned, maxMarks } = vault.sampleGrade;
   if (!Number.isInteger(marksEarned) || marksEarned < 0) return false;
@@ -61,19 +59,17 @@ export async function POST(request: NextRequest) {
     }
 
     const vault = body as OnboardingVault;
+    const answerKeys = normalizeAnswerKeys(vault);
     const startedAt = new Date(vault.startedAt);
     if (Number.isNaN(startedAt.getTime())) {
       return NextResponse.json({ error: "Invalid startedAt timestamp." }, { status: 400 });
     }
 
-    // Switch the user to teacher (the funnel is teacher-targeted by definition).
     if (user.role !== "teacher") {
       await setUserRole("teacher");
     }
     const teacherId = user.id;
 
-    // Idempotency lookup: an existing starter class owned by this teacher
-    // created on/after startedAt - 1s suggests this sync already ran.
     const idempotencyFloor = new Date(startedAt.getTime() - 1000);
     const [existingClass] = await db
       .select({ id: classes.id, createdAt: classes.createdAt })
@@ -118,12 +114,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fresh insert — wrap in a transaction so partial failures roll back.
     const sampleGrade = vault.sampleGrade!;
-    const answerKey = vault.answerKey!;
     const submittedAt = startedAt;
     const gradedAt = vault.completedAt ? new Date(vault.completedAt) : new Date();
-    const studentAnswerText = sampleGrade.ocrAnswerText ?? "";
+    const perQuestion = sampleGrade.questions ?? [];
 
     const result = await db.transaction(async (tx) => {
       const [classRow] = await tx
@@ -144,19 +138,23 @@ export async function POST(request: NextRequest) {
         status: "active",
       });
 
-      const [questionRow] = await tx
-        .insert(questionBank)
-        .values({
-          teacherId,
-          classId: classRow.id,
-          prompt: answerKey.prompt,
-          correctAnswer: answerKey.correctAnswer,
-          marks: answerKey.marks,
-          topic: "Sample",
-        })
-        .returning({ id: questionBank.id });
-
-      if (!questionRow) throw new Error("Failed to create sample question.");
+      const questionIds: string[] = [];
+      for (let index = 0; index < answerKeys.length; index += 1) {
+        const key = answerKeys[index];
+        const [questionRow] = await tx
+          .insert(questionBank)
+          .values({
+            teacherId,
+            classId: classRow.id,
+            prompt: key.prompt,
+            correctAnswer: key.correctAnswer,
+            marks: key.marks,
+            topic: "Sample",
+          })
+          .returning({ id: questionBank.id });
+        if (!questionRow) throw new Error("Failed to create sample question.");
+        questionIds.push(questionRow.id);
+      }
 
       const [testRow] = await tx
         .insert(tests)
@@ -169,20 +167,23 @@ export async function POST(request: NextRequest) {
 
       if (!testRow) throw new Error("Failed to create sample test.");
 
-      await tx.insert(testQuestions).values({
-        testId: testRow.id,
-        questionId: questionRow.id,
-        sortOrder: 0,
-      });
+      for (let index = 0; index < questionIds.length; index += 1) {
+        await tx.insert(testQuestions).values({
+          testId: testRow.id,
+          questionId: questionIds[index],
+          sortOrder: index,
+        });
+      }
 
+      const totalMax = answerKeys.reduce((sum, key) => sum + key.marks, 0);
       const [attemptRow] = await tx
         .insert(testAttempts)
         .values({
           testId: testRow.id,
           studentId: teacherId,
           status: "graded",
-          totalMarks: Math.min(sampleGrade.marksEarned, answerKey.marks),
-          maxMarks: answerKey.marks,
+          totalMarks: Math.min(sampleGrade.marksEarned, totalMax),
+          maxMarks: totalMax,
           submittedAt,
           gradedAt,
         })
@@ -190,13 +191,20 @@ export async function POST(request: NextRequest) {
 
       if (!attemptRow) throw new Error("Failed to create sample attempt.");
 
-      await tx.insert(attemptAnswers).values({
-        attemptId: attemptRow.id,
-        questionId: questionRow.id,
-        studentAnswer: studentAnswerText,
-        marksEarned: Math.min(sampleGrade.marksEarned, answerKey.marks),
-        feedback: sampleGrade.feedback ?? null,
-      });
+      for (let index = 0; index < questionIds.length; index += 1) {
+        const key = answerKeys[index];
+        const graded = perQuestion[index];
+        await tx.insert(attemptAnswers).values({
+          attemptId: attemptRow.id,
+          questionId: questionIds[index],
+          studentAnswer: graded?.ocrAnswerText ?? (index === 0 ? sampleGrade.ocrAnswerText ?? "" : ""),
+          marksEarned: Math.min(
+            graded?.marksEarned ?? (index === 0 ? sampleGrade.marksEarned : 0),
+            key.marks,
+          ),
+          feedback: graded?.feedback ?? (index === 0 ? sampleGrade.feedback ?? null : null),
+        });
+      }
 
       return { classId: classRow.id, testId: testRow.id, attemptId: attemptRow.id };
     });

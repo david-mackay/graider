@@ -232,6 +232,13 @@ export type SampleGradeResponse = {
   maxMarks: number;
   feedback: string;
   ocrAnswerText: string;
+  questions?: Array<{
+    prompt: string;
+    marksEarned: number;
+    maxMarks: number;
+    feedback: string;
+    ocrAnswerText: string;
+  }>;
 };
 
 export type OnboardingSyncResponse = {

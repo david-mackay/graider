@@ -1,5 +1,6 @@
 import {
   ONBOARDING_VAULT_VERSION,
+  hasAnswerKey,
   type OnboardingStep,
   type OnboardingVault,
 } from "./types";
@@ -115,7 +116,7 @@ export function clearVault(): void {
  * intercept to drop a returning user back where they left off.
  */
 export function getResumeStep(vault: OnboardingVault | null): OnboardingStep {
-  if (!vault || !vault.answerKey) return "hook";
+  if (!vault || !hasAnswerKey(vault)) return "hook";
   if (!vault.studentPaper) return "upload";
   if (!vault.sampleGrade) return "result";
   if (!vault.completedAt) return "save";

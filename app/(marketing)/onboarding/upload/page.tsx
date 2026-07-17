@@ -7,6 +7,7 @@ import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { IconX } from "@/components/shared/icons";
 import { getVault, setVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
+import { hasAnswerKey } from "@/lib/onboarding/types";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -36,11 +37,11 @@ export default function OnboardingUploadPage() {
   const [isBusy, setIsBusy] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Guard: must have answerKey to be here.
+  // Guard: must have answer key(s) to be here.
   useEffect(() => {
     fireEvent(ONBOARDING_EVENTS.PAPER_UPLOAD);
     const vault = getVault();
-    if (!vault?.answerKey) {
+    if (!hasAnswerKey(vault)) {
       router.replace("/onboarding/answer-key");
     }
   }, [router]);
@@ -112,12 +113,12 @@ export default function OnboardingUploadPage() {
   return (
     <OnboardingShell step={4} backHref="/onboarding/answer-key">
       <div className="text-center">
-        <p className="font-hand text-2xl text-pen">Step two</p>
+        <p className="font-hand text-2xl text-pen">Photograph the stack</p>
         <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-          Now drop a photo of your student&rsquo;s answer.
+          Now snap one student&rsquo;s paper from the pile.
         </h1>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
-          JPG or PNG. We&rsquo;ll read the handwriting for you.
+          Same move as the full app — camera or photo library. We&rsquo;ll mark it against the key you just set.
         </p>
       </div>
 

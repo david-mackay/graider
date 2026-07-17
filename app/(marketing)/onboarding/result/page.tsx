@@ -8,7 +8,7 @@ import SocialProofCard from "@/components/marketing/SocialProofCard";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { getResumeStep, getVault, setVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
-import type { OnboardingSampleGrade } from "@/lib/onboarding/types";
+import { hasAnswerKey, normalizeAnswerKeys, type OnboardingSampleGrade } from "@/lib/onboarding/types";
 import type { SampleGradeResponse } from "@/lib/types";
 
 type ResultState =
@@ -58,21 +58,23 @@ export default function OnboardingResultPage() {
       return;
     }
 
-    if (!vault.answerKey || !vault.studentPaper) {
+    if (!hasAnswerKey(vault) || !vault.studentPaper) {
       router.replace("/onboarding/upload");
       return;
     }
 
-    const { answerKey, studentPaper } = vault;
+    const answerKeys = normalizeAnswerKeys(vault);
+    const { studentPaper } = vault;
     const formData = new FormData();
     const blob = base64ToBlob(studentPaper.base64, studentPaper.mimeType);
     formData.append("image", blob, studentPaper.filename || "paper.png");
+    formData.append("answerKeys", JSON.stringify(answerKeys));
     formData.append(
       "answerKey",
       JSON.stringify({
-        prompt: answerKey.prompt,
-        correctAnswer: answerKey.correctAnswer,
-        marks: answerKey.marks,
+        prompt: answerKeys[0].prompt,
+        correctAnswer: answerKeys[0].correctAnswer,
+        marks: answerKeys[0].marks,
       }),
     );
 
@@ -99,6 +101,7 @@ export default function OnboardingResultPage() {
           maxMarks: payload.maxMarks,
           feedback: payload.feedback,
           ocrAnswerText: payload.ocrAnswerText,
+          questions: payload.questions,
         };
         setVault({ sampleGrade: grade, completedAt: new Date().toISOString() });
         const isSoftFail = grade.marksEarned === 0 && grade.ocrAnswerText === "";
@@ -144,6 +147,29 @@ export default function OnboardingResultPage() {
                 </p>
               ) : null}
             </div>
+
+            {state.grade.questions && state.grade.questions.length > 1 ? (
+              <div className="mt-6 space-y-3 border-t border-line pt-4 text-left">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-ink-faint">
+                  Per question
+                </p>
+                {state.grade.questions.map((q, index) => (
+                  <div key={`${index}-${q.prompt.slice(0, 20)}`} className="rounded-xl border border-line bg-cream px-3.5 py-2.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-sm font-semibold text-ink line-clamp-2">
+                        Q{index + 1}. {q.prompt}
+                      </p>
+                      <p className="shrink-0 font-hand text-lg font-bold text-pen">
+                        {q.marksEarned}/{q.maxMarks}
+                      </p>
+                    </div>
+                    {q.feedback ? (
+                      <p className="mt-1 text-xs leading-relaxed text-ink-soft">{q.feedback}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             {state.grade.ocrAnswerText ? (
               <div className="mt-6 border-t border-line pt-4">
