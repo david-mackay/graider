@@ -4,6 +4,7 @@ import { and, eq, gte } from "drizzle-orm";
 import { getCurrentUser, setUserRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
+  appUsers,
   attemptAnswers,
   classMemberships,
   classes,
@@ -15,12 +16,13 @@ import {
 import {
   ONBOARDING_VAULT_VERSION,
   normalizeAnswerKeys,
+  normalizeStudents,
   type OnboardingVault,
 } from "@/lib/onboarding/types";
 import { type OnboardingSyncResponse } from "@/lib/types";
 
 const STARTER_CLASS_NAME = "My first class";
-const STARTER_TEST_TITLE = "Sample test";
+const STARTER_TEST_TITLE = "My first test";
 
 function generateInviteCode() {
   return randomUUID().split("-")[0].toUpperCase();
@@ -33,10 +35,8 @@ function isValidVault(input: unknown): input is OnboardingVault {
   if (typeof vault.startedAt !== "string" || vault.startedAt.length === 0) return false;
   const keys = normalizeAnswerKeys(vault);
   if (keys.length === 0) return false;
-  if (!vault.sampleGrade) return false;
-  const { marksEarned, maxMarks } = vault.sampleGrade;
-  if (!Number.isInteger(marksEarned) || marksEarned < 0) return false;
-  if (!Number.isInteger(maxMarks) || maxMarks <= 0) return false;
+  const students = normalizeStudents(vault);
+  if (students.length === 0) return false;
   return true;
 }
 
@@ -90,34 +90,29 @@ export async function POST(request: NextRequest) {
         .where(and(eq(tests.classId, existingClass.id), eq(tests.title, STARTER_TEST_TITLE)))
         .limit(1);
 
-      const [existingAttempt] = existingTest
-        ? await db
-            .select({ id: testAttempts.id })
-            .from(testAttempts)
-            .where(
-              and(
-                eq(testAttempts.testId, existingTest.id),
-                eq(testAttempts.studentId, teacherId),
-              ),
-            )
-            .limit(1)
-        : [];
+      if (existingTest) {
+        const existingAttempts = await db
+          .select({ id: testAttempts.id })
+          .from(testAttempts)
+          .where(eq(testAttempts.testId, existingTest.id));
 
-      if (existingTest && existingAttempt) {
-        const response: OnboardingSyncResponse = {
-          classId: existingClass.id,
-          testId: existingTest.id,
-          attemptId: existingAttempt.id,
-          created: false,
-        };
-        return NextResponse.json(response);
+        if (existingAttempts.length > 0) {
+          const response: OnboardingSyncResponse = {
+            classId: existingClass.id,
+            testId: existingTest.id,
+            attemptId: existingAttempts[0].id,
+            attemptIds: existingAttempts.map((a) => a.id),
+            created: false,
+          };
+          return NextResponse.json(response);
+        }
       }
     }
 
-    const sampleGrade = vault.sampleGrade!;
+    const students = normalizeStudents(vault);
     const submittedAt = startedAt;
     const gradedAt = vault.completedAt ? new Date(vault.completedAt) : new Date();
-    const perQuestion = sampleGrade.questions ?? [];
+    const totalMax = answerKeys.reduce((sum, key) => sum + key.marks, 0);
 
     const result = await db.transaction(async (tx) => {
       const [classRow] = await tx
@@ -149,7 +144,7 @@ export async function POST(request: NextRequest) {
             prompt: key.prompt,
             correctAnswer: key.correctAnswer,
             marks: key.marks,
-            topic: "Sample",
+            topic: "Onboarding",
           })
           .returning({ id: questionBank.id });
         if (!questionRow) throw new Error("Failed to create sample question.");
@@ -175,44 +170,62 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const totalMax = answerKeys.reduce((sum, key) => sum + key.marks, 0);
-      const [attemptRow] = await tx
-        .insert(testAttempts)
-        .values({
-          testId: testRow.id,
-          studentId: teacherId,
-          status: "graded",
-          totalMarks: Math.min(sampleGrade.marksEarned, totalMax),
-          maxMarks: totalMax,
-          submittedAt,
-          gradedAt,
-        })
-        .returning({ id: testAttempts.id });
-
-      if (!attemptRow) throw new Error("Failed to create sample attempt.");
-
-      for (let index = 0; index < questionIds.length; index += 1) {
-        const key = answerKeys[index];
-        const graded = perQuestion[index];
-        await tx.insert(attemptAnswers).values({
-          attemptId: attemptRow.id,
-          questionId: questionIds[index],
-          studentAnswer: graded?.ocrAnswerText ?? (index === 0 ? sampleGrade.ocrAnswerText ?? "" : ""),
-          marksEarned: Math.min(
-            graded?.marksEarned ?? (index === 0 ? sampleGrade.marksEarned : 0),
-            key.marks,
-          ),
-          feedback: graded?.feedback ?? (index === 0 ? sampleGrade.feedback ?? null : null),
+      const attemptIds: string[] = [];
+      for (const student of students) {
+        const studentId = `roster_${randomUUID()}`;
+        await tx.insert(appUsers).values({
+          id: studentId,
+          fullName: student.name,
+          role: "student",
         });
+        await tx.insert(classMemberships).values({
+          classId: classRow.id,
+          userId: studentId,
+          role: "student",
+          status: "active",
+        });
+
+        const perQuestion = student.grade.questions ?? [];
+        const [attemptRow] = await tx
+          .insert(testAttempts)
+          .values({
+            testId: testRow.id,
+            studentId,
+            status: "graded",
+            totalMarks: Math.min(student.grade.marksEarned, totalMax),
+            maxMarks: totalMax,
+            submittedAt,
+            gradedAt,
+          })
+          .returning({ id: testAttempts.id });
+
+        if (!attemptRow) throw new Error("Failed to create sample attempt.");
+        attemptIds.push(attemptRow.id);
+
+        for (let index = 0; index < questionIds.length; index += 1) {
+          const key = answerKeys[index];
+          const graded = perQuestion[index];
+          await tx.insert(attemptAnswers).values({
+            attemptId: attemptRow.id,
+            questionId: questionIds[index],
+            studentAnswer: graded?.ocrAnswerText ?? (index === 0 ? student.grade.ocrAnswerText ?? "" : ""),
+            marksEarned: Math.min(
+              graded?.marksEarned ?? (index === 0 ? student.grade.marksEarned : 0),
+              key.marks,
+            ),
+            feedback: graded?.feedback ?? (index === 0 ? student.grade.feedback ?? null : null),
+          });
+        }
       }
 
-      return { classId: classRow.id, testId: testRow.id, attemptId: attemptRow.id };
+      return { classId: classRow.id, testId: testRow.id, attemptIds };
     });
 
     const response: OnboardingSyncResponse = {
       classId: result.classId,
       testId: result.testId,
-      attemptId: result.attemptId,
+      attemptId: result.attemptIds[0],
+      attemptIds: result.attemptIds,
       created: true,
     };
     return NextResponse.json(response);

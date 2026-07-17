@@ -244,7 +244,9 @@ export type SampleGradeResponse = {
 export type OnboardingSyncResponse = {
   classId: string;
   testId: string;
+  /** First attempt id, kept for backward compatibility. Prefer `attemptIds`. */
   attemptId: string;
+  attemptIds: string[];
   created: boolean;
 };
 

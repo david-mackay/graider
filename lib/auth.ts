@@ -37,26 +37,45 @@ export async function getCurrentUser(): Promise<AppUser> {
     .limit(1);
 
   if (!existing) {
-    const [data] = await db
-      .insert(appUsers)
-      .values({
-        id: session.userId,
-        email,
-        fullName: fullName ?? null,
-        role: toAppRole(clerkRole),
-      })
-      .returning();
+    try {
+      const [data] = await db
+        .insert(appUsers)
+        .values({
+          id: session.userId,
+          email,
+          fullName: fullName ?? null,
+          role: toAppRole(clerkRole),
+        })
+        .returning();
 
-    if (!data) {
-      throw new Error("Failed to sync Clerk user");
+      if (!data) {
+        throw new Error("Failed to sync Clerk user");
+      }
+
+      return {
+        id: data.id,
+        email: data.email,
+        full_name: data.fullName,
+        role: toAppRole(data.role),
+      };
+    } catch (error) {
+      // Concurrent first requests (e.g. push-token + onboarding sync) can both
+      // miss the row and race on insert — recover by re-reading.
+      const [raced] = await db
+        .select()
+        .from(appUsers)
+        .where(eq(appUsers.id, session.userId))
+        .limit(1);
+      if (raced) {
+        return {
+          id: raced.id,
+          email: raced.email,
+          full_name: raced.fullName,
+          role: toAppRole(clerkRole ?? raced.role),
+        };
+      }
+      throw error;
     }
-
-    return {
-      id: data.id,
-      email: data.email,
-      full_name: data.fullName,
-      role: toAppRole(data.role),
-    };
   }
 
   const updates: Partial<{ email: string | null; fullName: string | null }> = {};

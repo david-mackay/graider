@@ -7,6 +7,7 @@ import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { BrandMark } from "@/components/shared/Brand";
 import { clearVault, getVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
+import { hasGradedStudents } from "@/lib/onboarding/types";
 import type { OnboardingSyncResponse } from "@/lib/types";
 
 type SyncState =
@@ -22,9 +23,9 @@ export default function OnboardingSyncPage() {
   async function runSync() {
     setState({ kind: "loading" });
     const vault = getVault();
-    if (!vault || !vault.sampleGrade) {
+    if (!vault || !hasGradedStudents(vault)) {
       setState({ kind: "redirecting" });
-      router.replace("/t/grade");
+      router.replace("/t");
       return;
     }
 
@@ -38,14 +39,14 @@ export default function OnboardingSyncPage() {
       if (!res.ok) {
         setState({
           kind: "error",
-          message: payload.error ?? "We couldn't save your first graded test. Try again.",
+          message: payload.error ?? "We couldn't save your graded class. Try again.",
         });
         return;
       }
       fireEvent(ONBOARDING_EVENTS.CLASS_SYNCED, { created: payload.created });
       clearVault();
       setState({ kind: "redirecting" });
-      router.replace("/t/grade?welcome=1");
+      router.replace("/t?welcome=1");
     } catch (err) {
       setState({
         kind: "error",
@@ -74,10 +75,10 @@ export default function OnboardingSyncPage() {
             {state.kind === "loading" || state.kind === "redirecting" ? (
               <>
                 <h1 className="font-display text-xl font-semibold text-ink">
-                  Saving your first graded test&hellip;
+                  Saving your graded class&hellip;
                 </h1>
                 <p className="mt-2 text-sm text-ink-soft">
-                  Setting up your starter class and seeding the sample grade.
+                  Setting up your starter class and adding each graded student.
                 </p>
                 <div className="mt-6 flex justify-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-pen border-t-transparent" />
@@ -97,7 +98,7 @@ export default function OnboardingSyncPage() {
                   >
                     Try Again
                   </button>
-                  <Link href="/t/grade" className={btnSecondary}>
+                  <Link href="/t" className={btnSecondary}>
                     Skip
                   </Link>
                 </div>

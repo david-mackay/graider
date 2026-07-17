@@ -78,6 +78,70 @@ function parseAnswerKeys(raw: string | null): { value?: OnboardingAnswerKey[]; e
   return { error: "Invalid answer key." };
 }
 
+function parseTypedAnswers(raw: FormDataEntryValue | null): string[] | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    return parsed.map((entry) => (typeof entry === "string" ? entry.trim() : ""));
+  } catch {
+    return null;
+  }
+}
+
+async function gradeAgainstKeys(
+  answerKeys: OnboardingAnswerKey[],
+  studentAnswers: string[],
+): Promise<SampleGradeResponse> {
+  const maxMarks = answerKeys.reduce((sum, key) => sum + key.marks, 0);
+  const questionGrades: OnboardingQuestionGrade[] = [];
+
+  for (let index = 0; index < answerKeys.length; index += 1) {
+    const key = answerKeys[index];
+    const studentAnswer = studentAnswers[index]?.trim() ?? "";
+
+    if (!studentAnswer) {
+      questionGrades.push({
+        prompt: key.prompt,
+        marksEarned: 0,
+        maxMarks: key.marks,
+        feedback: "No answer found for this question.",
+        ocrAnswerText: "",
+      });
+      continue;
+    }
+
+    const result = await gradeQuestion({
+      question: key.prompt,
+      marks: key.marks,
+      teacher_answer: key.correctAnswer,
+      student_answer: studentAnswer,
+    });
+
+    questionGrades.push({
+      prompt: key.prompt,
+      marksEarned: result.marks_earned,
+      maxMarks: key.marks,
+      feedback: result.feedback,
+      ocrAnswerText: studentAnswer,
+    });
+  }
+
+  const marksEarned = questionGrades.reduce((sum, q) => sum + q.marksEarned, 0);
+  const feedback =
+    questionGrades.length === 1
+      ? questionGrades[0].feedback
+      : questionGrades.map((q, i) => `Q${i + 1}: ${q.feedback}`).join(" ");
+
+  return {
+    marksEarned,
+    maxMarks,
+    feedback,
+    ocrAnswerText: questionGrades.map((q) => q.ocrAnswerText).filter(Boolean).join("\n\n"),
+    questions: questionGrades,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
   const limit = checkRateLimit(ip, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
@@ -96,22 +160,7 @@ export async function POST(request: NextRequest) {
   try {
     form = await request.formData();
   } catch {
-    return NextResponse.json({ error: "An image is required." }, { status: 400 });
-  }
-
-  const imageInput = form.get("image");
-  if (!imageInput || !isImageBody(imageInput)) {
-    return NextResponse.json({ error: "An image is required." }, { status: 400 });
-  }
-
-  const arrayBuffer = await imageInput.arrayBuffer();
-  if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
-    return NextResponse.json({ error: "Image must be under 8 MB." }, { status: 413 });
-  }
-
-  const mimeType = imageInput.type || "";
-  if (!mimeType.startsWith("image/")) {
-    return NextResponse.json({ error: "Upload an image file (JPG or PNG)." }, { status: 400 });
+    return NextResponse.json({ error: "A student answer is required." }, { status: 400 });
   }
 
   const answerKeyRaw = form.get("answerKey");
@@ -132,19 +181,47 @@ export async function POST(request: NextRequest) {
   const answerKeys = answerKeyParsed.value;
   const maxMarks = answerKeys.reduce((sum, key) => sum + key.marks, 0);
 
-  const buffer = Buffer.from(arrayBuffer);
-  const filename =
-    typeof File !== "undefined" && imageInput instanceof File && imageInput.name
-      ? imageInput.name
-      : "sample.png";
-  const imagePayload = {
-    filename,
-    mimeType,
-    base64: buffer.toString("base64"),
-  };
+  const typedAnswers = parseTypedAnswers(form.get("typedAnswers"));
+  if (typedAnswers && typedAnswers.some((answer) => answer.length > 0)) {
+    try {
+      const response = await gradeAgainstKeys(answerKeys, typedAnswers);
+      return NextResponse.json(response, { status: 200 });
+    } catch {
+      return NextResponse.json(
+        { error: "We're having trouble grading right now — please try again." },
+        { status: 502 },
+      );
+    }
+  }
+
+  const imageInputs = form.getAll("image").filter(isImageBody) as Blob[];
+  if (imageInputs.length === 0) {
+    return NextResponse.json(
+      { error: "Upload a photo or type a student answer." },
+      { status: 400 },
+    );
+  }
+
+  const imagePayloads: { filename: string; mimeType: string; base64: string }[] = [];
+  for (let i = 0; i < imageInputs.length; i++) {
+    const img = imageInputs[i];
+    const arrayBuffer = await img.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: "Each image must be under 8 MB." }, { status: 413 });
+    }
+    const mimeType = img.type || "";
+    if (!mimeType.startsWith("image/")) {
+      return NextResponse.json({ error: "Upload image files (JPG or PNG)." }, { status: 400 });
+    }
+    const filename =
+      typeof File !== "undefined" && img instanceof File && img.name
+        ? img.name
+        : `page-${i + 1}.png`;
+    imagePayloads.push({ filename, mimeType, base64: Buffer.from(arrayBuffer).toString("base64") });
+  }
 
   try {
-    const answers = await extractHandwrittenAnswers([imagePayload]);
+    const answers = await extractHandwrittenAnswers(imagePayloads);
 
     if (answers.length === 0) {
       const softFail: SampleGradeResponse = {
@@ -163,55 +240,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(softFail, { status: 200 });
     }
 
-    const questionGrades: OnboardingQuestionGrade[] = [];
-    for (let index = 0; index < answerKeys.length; index += 1) {
-      const key = answerKeys[index];
-      const studentAnswer =
-        answers.find((a) => a.question_index === index)?.answer ??
-        answers[index]?.answer ??
-        "";
-
-      if (!studentAnswer.trim()) {
-        questionGrades.push({
-          prompt: key.prompt,
-          marksEarned: 0,
-          maxMarks: key.marks,
-          feedback: "No answer found for this question.",
-          ocrAnswerText: "",
-        });
-        continue;
-      }
-
-      const result = await gradeQuestion({
-        question: key.prompt,
-        marks: key.marks,
-        teacher_answer: key.correctAnswer,
-        student_answer: studentAnswer,
-      });
-
-      questionGrades.push({
-        prompt: key.prompt,
-        marksEarned: result.marks_earned,
-        maxMarks: key.marks,
-        feedback: result.feedback,
-        ocrAnswerText: studentAnswer,
-      });
-    }
-
-    const marksEarned = questionGrades.reduce((sum, q) => sum + q.marksEarned, 0);
-    const feedback =
-      questionGrades.length === 1
-        ? questionGrades[0].feedback
-        : questionGrades.map((q, i) => `Q${i + 1}: ${q.feedback}`).join(" ");
-
-    const response: SampleGradeResponse = {
-      marksEarned,
-      maxMarks,
-      feedback,
-      ocrAnswerText: questionGrades.map((q) => q.ocrAnswerText).filter(Boolean).join("\n\n"),
-      questions: questionGrades,
-    };
-
+    const studentAnswers = answerKeys.map(
+      (_key, index) =>
+        answers.find((a) => a.question_index === index)?.answer ?? answers[index]?.answer ?? "",
+    );
+    const response = await gradeAgainstKeys(answerKeys, studentAnswers);
     return NextResponse.json(response, { status: 200 });
   } catch {
     return NextResponse.json(

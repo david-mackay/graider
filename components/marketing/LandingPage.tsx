@@ -92,7 +92,7 @@ export default function LandingPage() {
                 href="/onboarding/hook"
                 className="inline-flex cursor-pointer items-center justify-center rounded-full bg-pen px-8 py-3.5 text-base font-bold text-white shadow-lifted transition-all duration-150 hover:bg-pen-deep active:scale-[0.97]"
               >
-                Grade a sample paper
+                Grade your first paper
               </Link>
               <ClerkSignInButton mode="modal">
                 <button
