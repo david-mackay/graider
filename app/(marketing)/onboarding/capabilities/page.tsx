@@ -17,20 +17,22 @@ type Capability = {
 
 const CAPABILITIES: Capability[] = [
   {
-    Icon: IconCamera,
-    verb: "Scan",
-    example: "Snap a photo of Maya's handwritten test.",
+    Icon: IconStack,
+    verb: "Import",
+    example:
+      "Upload your test and answer bank. Questions and the key land automatically — you are not rebuilding the paper from scratch.",
   },
   {
     Icon: IconPen,
-    verb: "Grade",
+    verb: "Grade your way",
     example:
-      "AI compares her answer to your key — 7/10, 'Missed the second mitochondria function.'",
+      "Every mark is checked against your rubric and answer key. Reliable grading, not an AI giving its opinions.",
   },
   {
-    Icon: IconStack,
-    verb: "Review",
-    example: "See exactly where the class struggled before next lesson.",
+    Icon: IconCamera,
+    verb: "Hand it back",
+    example:
+      "Toggle feedback on or off, share a PDF immediately, or email results with each student's address already filled in.",
   },
 ];
 
@@ -46,7 +48,7 @@ export default function OnboardingCapabilitiesPage() {
           That&rsquo;s where <Wordmark className="text-[1em]" /> comes in.
         </h1>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
-          Three things it does in the background while you teach.
+          Bring the test you already wrote. Grade against the key you trust. Hand papers back tonight.
         </p>
       </div>
 
