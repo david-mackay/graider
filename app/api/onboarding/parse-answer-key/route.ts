@@ -6,8 +6,13 @@ import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import { ONBOARDING_MAX_ANSWER_KEYS } from "@/lib/onboarding/types";
 
 export const runtime = "nodejs";
+// PDF text extraction + LLM question parsing can take a while; the default
+// function timeout returns an HTML error page that breaks the client's res.json().
+export const maxDuration = 60;
 
-const MAX_PDF_BYTES = 12 * 1024 * 1024;
+// Vercel caps request bodies around 4.5 MB before the handler runs, so keep the
+// client-facing limit below that to return JSON instead of an HTML 413.
+const MAX_PDF_BYTES = 4 * 1024 * 1024;
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
@@ -58,7 +63,10 @@ export async function POST(request: NextRequest) {
 
   const arrayBuffer = await pdfInput.arrayBuffer();
   if (arrayBuffer.byteLength > MAX_PDF_BYTES) {
-    return NextResponse.json({ error: "PDF must be under 12 MB." }, { status: 413 });
+    return NextResponse.json(
+      { error: "PDF is too large. Keep it under 4 MB, or add the key manually." },
+      { status: 413 },
+    );
   }
 
   const mimeType = pdfInput.type || "";
