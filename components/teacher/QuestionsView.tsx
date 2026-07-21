@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { Badge, Card, FormField, SectionHeader, btnDanger, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
 import { IconBook } from "@/components/shared/icons";
+import PdfImportPanel from "@/components/shared/PdfImportPanel";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
 import type { DashboardQuestion, GroupedQuestions } from "@/lib/dashboard-types";
 
@@ -183,6 +184,16 @@ export default function QuestionsView({
         </Card>
       ) : (
         <>
+          {classId ? (
+            <PdfImportPanel
+              classId={classId}
+              kind="question_bank"
+              onComplete={onChanged}
+              onStatus={onStatus}
+              disabled={isBusy}
+            />
+          ) : null}
+
           {showAddForm ? (
             <Card className="border-ink-faint">
               <h3 className="mb-4 text-sm font-semibold text-ink">New question</h3>
@@ -278,7 +289,7 @@ export default function QuestionsView({
                 <IconBook className="h-5 w-5 text-ink-faint" />
               </div>
               <p className="text-sm font-semibold text-ink">No questions yet</p>
-              <p className="mt-1 text-xs text-ink-faint">Click “+ Add question” above to build your question bank.</p>
+              <p className="mt-1 text-xs text-ink-faint">Import a PDF above, or click “+ Add question” to type one.</p>
             </Card>
           ) : (
             <div className="space-y-4">

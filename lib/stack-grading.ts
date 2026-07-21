@@ -40,6 +40,58 @@ export function normalizeQuestion(text: string) {
 }
 
 /**
+ * Match OCR rows onto test questions.
+ * Prefer exact/normalized prompt match; fall back to printed question_index
+ * (1-based or 0-based) — critical for MCQ sheets where stems OCR poorly.
+ */
+export function matchOcrAnswersToQuestions(
+  extracted: OcrAnswer[],
+  questions: { questionId: string; prompt: string }[],
+): { questionId: string; studentAnswer: string }[] {
+  const byPrompt = new Map<string, string>();
+  for (const q of questions) {
+    byPrompt.set(normalizeQuestion(q.prompt), q.questionId);
+    byPrompt.set(normalizeQuestion(q.questionId), q.questionId);
+  }
+
+  const used = new Set<string>();
+  const rows: { questionId: string; studentAnswer: string }[] = [];
+
+  const tryAdd = (questionId: string | undefined, answer: string) => {
+    const trimmed = answer.trim();
+    if (!questionId || !trimmed || used.has(questionId)) return false;
+    used.add(questionId);
+    rows.push({ questionId, studentAnswer: trimmed });
+    return true;
+  };
+
+  for (const entry of extracted) {
+    if (tryAdd(byPrompt.get(normalizeQuestion(entry.question)), entry.answer)) {
+      continue;
+    }
+
+    if (typeof entry.question_index === "number" && Number.isFinite(entry.question_index)) {
+      const raw = Math.trunc(entry.question_index);
+      // Prefer 1-based printed numbers; also accept 0-based indexes.
+      const candidates = raw >= 1 ? [raw - 1, raw] : [raw];
+      for (const idx of candidates) {
+        const q = questions[idx];
+        if (q && tryAdd(q.questionId, entry.answer)) break;
+      }
+    }
+  }
+
+  // Positional fallback when counts line up and little matched by prompt/index.
+  if (rows.length === 0 && extracted.length > 0 && extracted.length === questions.length) {
+    for (let i = 0; i < extracted.length; i += 1) {
+      tryAdd(questions[i]?.questionId, extracted[i]?.answer ?? "");
+    }
+  }
+
+  return rows;
+}
+
+/**
  * Normalizes a person's name or email for fuzzy comparison: lowercases, trims,
  * and collapses runs of whitespace to single spaces. No diacritic folding for v1.
  */
@@ -319,11 +371,10 @@ export async function commitStack(params: {
     .where(eq(testQuestions.testId, testId))
     .orderBy(asc(testQuestions.sortOrder));
 
-  const questionByNormalizedPrompt = new Map<string, string>();
-  for (const row of tqRows) {
-    questionByNormalizedPrompt.set(normalizeQuestion(row.prompt), row.questionId);
-    questionByNormalizedPrompt.set(normalizeQuestion(row.qbId), row.questionId);
-  }
+  const questionsForMatch = tqRows.map((row) => ({
+    questionId: row.questionId,
+    prompt: row.prompt,
+  }));
 
   // Group pages by student so multi-page submissions grade once per student.
   const pagesByStudent = new Map<
@@ -411,12 +462,7 @@ export async function commitStack(params: {
     }
 
     // Match OCR answers to test_questions and upsert (all pages for this student).
-    const matchRows: { questionId: string; studentAnswer: string }[] = [];
-    for (const extracted of studentPages.ocrAnswers) {
-      const match = questionByNormalizedPrompt.get(normalizeQuestion(extracted.question));
-      if (!match) continue;
-      matchRows.push({ questionId: match, studentAnswer: extracted.answer });
-    }
+    const matchRows = matchOcrAnswersToQuestions(studentPages.ocrAnswers, questionsForMatch);
 
     for (const row of matchRows) {
       await db

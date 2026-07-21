@@ -263,10 +263,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(softFail, { status: 200 });
     }
 
-    const studentAnswers = answerKeys.map(
-      (_key, index) =>
-        answers.find((a) => a.question_index === index)?.answer ?? answers[index]?.answer ?? "",
-    );
+    const studentAnswers = answerKeys.map((_key, index) => {
+      const byIndex = answers.find((a) => {
+        if (typeof a.question_index !== "number") return false;
+        const raw = Math.trunc(a.question_index);
+        return raw === index || raw === index + 1;
+      });
+      return byIndex?.answer ?? answers[index]?.answer ?? "";
+    });
     const response = await gradeAgainstKeys(answerKeys, studentAnswers);
     return NextResponse.json(response, { status: 200 });
   } catch {

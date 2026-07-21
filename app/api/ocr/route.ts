@@ -3,10 +3,10 @@ import { Buffer } from "buffer";
 import { requireRole, requireClassAccess } from "@/lib/auth";
 import { uploadFile } from "@/lib/storage";
 import { extractHandwrittenAnswers } from "@/lib/reducto";
+import { matchOcrAnswersToQuestions } from "@/lib/stack-grading";
 import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, ocrBatches } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
-import { normalizeQuestion } from "@/lib/stack-grading";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -81,41 +81,23 @@ export async function POST(request: NextRequest) {
       .select({
         questionId: testQuestions.questionId,
         prompt: questionBank.prompt,
-        qbId: questionBank.id,
       })
       .from(testQuestions)
       .innerJoin(questionBank, eq(testQuestions.questionId, questionBank.id))
       .where(eq(testQuestions.testId, attempt.testId))
       .orderBy(asc(testQuestions.sortOrder));
 
-    const questionByNormalizedPrompt = new Map<string, string>();
-    for (const row of tqRows) {
-      questionByNormalizedPrompt.set(normalizeQuestion(row.prompt), row.questionId);
-      questionByNormalizedPrompt.set(normalizeQuestion(row.qbId), row.questionId);
-    }
-
-    const matchRows: { questionId: string; studentAnswer: string }[] = [];
-    for (const extracted of answers) {
-      const match = questionByNormalizedPrompt.get(normalizeQuestion(extracted.question));
-      if (!match) continue;
-
-      matchRows.push({
-        questionId: match,
-        studentAnswer: extracted.answer,
-      });
-    }
+    const matchRows = matchOcrAnswersToQuestions(answers, tqRows);
 
     if (matchRows.length > 0) {
-      const rows = matchRows.map((row) => ({
-        attemptId,
-        questionId: row.questionId,
-        studentAnswer: row.studentAnswer,
-      }));
-
-      for (const row of rows) {
+      for (const row of matchRows) {
         await db
           .insert(attemptAnswers)
-          .values(row)
+          .values({
+            attemptId,
+            questionId: row.questionId,
+            studentAnswer: row.studentAnswer,
+          })
           .onConflictDoUpdate({
             target: [attemptAnswers.attemptId, attemptAnswers.questionId],
             set: { studentAnswer: row.studentAnswer },

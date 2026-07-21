@@ -168,6 +168,8 @@ async function extractWithSchema(params: {
   fileIds: string[];
   schema: unknown;
   systemPrompt: string;
+  /** Use for long answer keys / banks (100+ rows). Higher cost/latency. */
+  deepExtract?: boolean;
 }): Promise<Record<string, unknown>> {
   const client = getClient();
   const input = params.fileIds.length === 1 ? params.fileIds[0] : params.fileIds;
@@ -190,6 +192,7 @@ async function extractWithSchema(params: {
     settings: {
       array_extract: true,
       include_images: true,
+      deep_extract: Boolean(params.deepExtract),
     },
   });
 
@@ -211,6 +214,7 @@ export async function extractAnswerKeyQuestions(
     fileIds,
     schema: QUESTIONS_SCHEMA,
     systemPrompt: ANSWER_KEY_SYSTEM_PROMPT,
+    deepExtract: true,
   });
   return normalizeParsedQuestions(data.questions);
 }
@@ -235,6 +239,7 @@ export async function extractTestFromDocument(
     systemPrompt:
       ANSWER_KEY_SYSTEM_PROMPT +
       " Also extract the test title from the header when present.",
+    deepExtract: true,
   });
   const title =
     typeof data.title === "string" && data.title.trim()
@@ -255,19 +260,21 @@ const OCR_ANSWER_ITEM_SCHEMA = {
   properties: {
     question: {
       type: "string",
-      description: "Question prompt / stem as written on the paper",
+      description:
+        "Question stem if printed. For numbered MCQ sheets prefer 'Question N' matching the printed number — do not invent full stems.",
     },
     answer: {
       type: "string",
       description:
-        "Student's handwritten answer exactly as written. For MCQ return the selected letter (A–E) when circled, bubbled, or marked.",
+        "Student response. For MCQ: the selected letter only (A–E) when circled, bubbled, crossed, highlighted, or otherwise marked. For open items: the written answer as shown (print or handwriting).",
     },
     question_index: {
       type: "integer",
-      description: "Printed question number if visible; otherwise omit",
+      description:
+        "1-based printed question number when visible (1, 2, 3…). Critical for MCQ sheets — always set when a number appears.",
     },
   },
-  required: ["question", "answer"],
+  required: ["question", "answer", "question_index"],
 } as const;
 
 const FLAT_ANSWERS_SCHEMA = {
@@ -352,12 +359,13 @@ const STUDENT_BUCKET_SCHEMA = {
   required: ["pages"],
 } as const;
 
-const HANDWRITING_OCR_PROMPT =
-  "These are photographed handwritten student exam pages. " +
-  "Read question prompts and student answers exactly as written. " +
-  "For multiple-choice, return the selected letter (A–E) when circled, bubbled, highlighted, or marked. " +
-  "Do not invent answers. Blank or unreadable answers stay empty. " +
-  "Extract every visible Q/A pair — do not truncate.";
+const STUDENT_PAPER_OCR_PROMPT =
+  "These are photographed student exam pages (printed MCQ sheets, bubble sheets, and/or handwriting). " +
+  "Extract every answered item. Prefer question_index from the printed number. " +
+  "For multiple-choice: the answer is the letter the student selected — circled, bubbled, crossed out alternatives, highlighted, or marked — return that letter only (A–E). " +
+  "Do not treat option text as the answer. Do not invent questions or answers. " +
+  "If the stem is hard to read but the number and selected letter are clear, use question='Question N' and answer=letter. " +
+  "Blank or unreadable items stay empty. Extract every item — do not truncate.";
 
 function imagesToUploads(images: ImagePayload[]): ReductoUploadInput[] {
   return images.map((img) => ({
@@ -405,7 +413,7 @@ export async function extractHandwrittenAnswers(images: ImagePayload[]): Promise
   const data = await extractWithSchema({
     fileIds,
     schema: FLAT_ANSWERS_SCHEMA,
-    systemPrompt: HANDWRITING_OCR_PROMPT,
+    systemPrompt: STUDENT_PAPER_OCR_PROMPT,
   });
   return coerceOcrAnswers(data.answers);
 }
@@ -421,7 +429,7 @@ export async function extractHandwrittenStack(images: ImagePayload[]): Promise<O
     fileIds,
     schema: STACK_PAGES_SCHEMA,
     systemPrompt:
-      HANDWRITING_OCR_PROMPT +
+      STUDENT_PAPER_OCR_PROMPT +
       ` There are ${images.length} page image(s) in order (pageIndex 0..${images.length - 1}). ` +
       "Return exactly one pages entry per image in the same order. " +
       "Also read the student's handwritten name at the top of each page. " +
@@ -459,7 +467,7 @@ export async function extractHandwrittenStudentBucket(
     fileIds,
     schema: STUDENT_BUCKET_SCHEMA,
     systemPrompt:
-      HANDWRITING_OCR_PROMPT +
+      STUDENT_PAPER_OCR_PROMPT +
       ` These ${images.length} page(s) belong to ONE student already assigned by the teacher — do NOT read or guess any student name. ` +
       `Use these global pageIndex values exactly, in order: ${indexList}. ` +
       "Return exactly one pages entry per image.",
@@ -527,7 +535,7 @@ export async function parseTestFromStackImages(
     fileIds,
     schema: TEST_SCHEMA,
     systemPrompt:
-      "These photos are handwritten student test papers from the same assessment. " +
+      "These photos are student test papers from the same assessment (printed and/or handwritten). " +
       "Extract the test title (from a header if visible, otherwise a short descriptive title) " +
       "and every question prompt shown across the pages. " +
       "For each question provide a model correct_answer a teacher would use to grade " +
@@ -535,6 +543,7 @@ export async function parseTestFromStackImages(
       "Use printed mark values when present; otherwise default marks sensibly. " +
       "Set question_type to mcq when options A–E appear; otherwise open. Include choices when visible. " +
       "Extract every question — do not truncate.",
+    deepExtract: true,
   });
   const title =
     typeof data.title === "string" && data.title.trim()

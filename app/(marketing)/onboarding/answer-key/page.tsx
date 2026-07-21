@@ -301,7 +301,7 @@ export default function OnboardingAnswerKeyPage() {
                 </div>
                 {truncated ? (
                   <p className="text-xs text-ink-faint">
-                    Showing the first {keys.length} for this free demo.
+                    Showing the first {keys.length} for this free demo (max 200).
                   </p>
                 ) : null}
               </div>

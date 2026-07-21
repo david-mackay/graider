@@ -7,7 +7,7 @@ import type { ParsedImportQuestion } from "@/lib/types";
 
 export const runtime = "nodejs";
 // Reducto OCR + extract can take a while; avoid Vercel HTML timeouts that break res.json().
-export const maxDuration = 90;
+export const maxDuration = 120;
 
 // Vercel caps request bodies around 4.5 MB before the handler runs, so keep the
 // client-facing limit below that to return JSON instead of an HTML 413.

@@ -1,5 +1,6 @@
 export const ONBOARDING_VAULT_VERSION = 2 as const;
-export const ONBOARDING_MAX_ANSWER_KEYS = 8;
+/** Soft cap for the free onboarding demo review screen (not a Reducto limit). */
+export const ONBOARDING_MAX_ANSWER_KEYS = 200;
 export const ONBOARDING_MAX_STUDENTS = 5;
 
 export type OnboardingAnswerKey = {

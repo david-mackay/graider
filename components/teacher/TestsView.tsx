@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { Badge, Card, FormField, SectionHeader, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
 import { IconClipboard, IconX } from "@/components/shared/icons";
+import PdfImportPanel from "@/components/shared/PdfImportPanel";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
 import type { OcrAnswer, TestDetail } from "@/lib/types";
 import type {
@@ -233,7 +234,16 @@ export default function TestsView({
       />
 
       {classCanManage ? (
-        <div>
+        <div className="space-y-4">
+          {classId ? (
+            <PdfImportPanel
+              classId={classId}
+              kind="test"
+              onComplete={onChanged}
+              onStatus={onStatus}
+              disabled={isBusy}
+            />
+          ) : null}
           {!testTitle && selectedQuestionIds.length === 0 ? (
             <button
               type="button"
@@ -267,6 +277,7 @@ export default function TestsView({
                   >
                     Add questions first
                   </button>
+                  {" "}or import a test PDF above.
                 </p>
               ) : (
                 <form onSubmit={createTest} className="space-y-4">
