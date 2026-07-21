@@ -1,3 +1,6 @@
+// pdf-parse v2 needs the worker/canvas factory BEFORE the main import, or
+// Vercel Node throws "DOMMatrix is not defined" while loading the module.
+import { CanvasFactory } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
 import { readFile } from "@/lib/storage";
 import { assessPdfText } from "@/lib/mcq";
@@ -11,7 +14,7 @@ export type PdfTextAssessment = {
 export async function extractPdfTextAssessmentFromBuffer(
   buffer: Buffer,
 ): Promise<PdfTextAssessment> {
-  const parser = new PDFParse({ data: buffer });
+  const parser = new PDFParse({ data: buffer, CanvasFactory });
   try {
     const parsed = await parser.getText();
     return assessPdfText(parsed.text ?? "");
