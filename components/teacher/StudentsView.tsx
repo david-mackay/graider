@@ -253,7 +253,7 @@ export default function StudentsView({
       await navigator.clipboard.writeText(invite.code);
       setCopiedId(invite.id);
       onStatus(
-        `Invite code copied for ${invite.invited_name ?? "student"}. They sign up and enter this code.`,
+        `Invite code copied for ${invite.invited_name ?? "student"}. They go to /student, sign up, and enter this code.`,
       );
       setTimeout(() => setCopiedId((id) => (id === invite.id ? "" : id)), 2000);
     } catch {

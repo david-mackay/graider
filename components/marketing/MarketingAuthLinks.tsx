@@ -8,7 +8,7 @@ export default function MarketingAuthLinks() {
   return (
     <div className="flex items-center gap-2 sm:gap-3">
       <Link
-        href="/#student"
+        href="/student"
         className="cursor-pointer rounded-full px-3 py-2 text-sm font-bold text-ink-soft transition-colors duration-150 hover:text-pen"
       >
         Student

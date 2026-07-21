@@ -10,7 +10,7 @@ export default clerkMiddleware(async (auth, req) => {
   // student layout and redirect to "/" with the query stripped.
   if (!userId && pathname.startsWith("/s") && join) {
     const url = req.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/student";
     url.search = "";
     url.searchParams.set("join", join);
     return NextResponse.redirect(url);

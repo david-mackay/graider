@@ -26,7 +26,7 @@ export default function StudentAuthEntry({ initialCode = "", compact = false }: 
     <div className={compact ? "space-y-2" : "space-y-3"}>
       {!compact ? (
         <p className="text-sm text-ink-soft">
-          Enter the invite code from your teacher, then create an account or sign in.
+          Enter the invite code from your teacher, then create an account or sign in to join your class.
         </p>
       ) : null}
       <label className="block">

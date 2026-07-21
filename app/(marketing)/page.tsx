@@ -14,19 +14,24 @@ export default async function RootPage({ searchParams }: RootPageProps) {
   const params = await Promise.resolve(searchParams ?? {});
   const join = typeof params.join === "string" ? params.join.trim() : "";
 
+  // Student invites land on the dedicated student landing page.
+  if (join) {
+    redirect(`/student?join=${encodeURIComponent(join)}`);
+  }
+
   if (!hasClerkPublishableKey()) {
-    return <LandingPage inviteCode={join || undefined} />;
+    return <LandingPage />;
   }
 
   const session = await auth();
 
   if (!session?.userId) {
-    return <LandingPage inviteCode={join || undefined} />;
+    return <LandingPage />;
   }
 
   const user = await getCurrentUser();
   if (user.role === "teacher") {
     redirect("/t");
   }
-  redirect(join ? `/s?join=${encodeURIComponent(join)}` : "/s");
+  redirect("/s");
 }
