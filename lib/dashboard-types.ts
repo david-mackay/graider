@@ -28,10 +28,13 @@ export type GradedAttemptDetail = {
   test_id: string;
   test_title: string;
   student_id: string;
+  student_name?: string | null;
   status: "draft" | "submitted" | "graded";
   total_marks: number | null;
   max_marks: number | null;
+  graded_at?: string | null;
   test_class_id?: string | null;
+  ocr_uploads?: string[] | null;
   questions: GradedAttemptQuestion[];
 };
 

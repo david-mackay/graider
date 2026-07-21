@@ -5,6 +5,7 @@ import { Badge, Card, FormField, SectionHeader, btnPrimary, btnSecondary, inputC
 import { IconClipboard, IconCheck, IconPen, IconX } from "@/components/shared/icons";
 import PdfImportPanel from "@/components/shared/PdfImportPanel";
 import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
+import ExportGradePdfButton from "@/components/shared/ExportGradePdfButton";
 import TestAdministerPanel from "@/components/teacher/TestAdministerPanel";
 import TestViewEditor from "@/components/teacher/TestViewEditor";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
@@ -497,9 +498,19 @@ export default function TestsView({
                 <p className="mt-1 text-sm text-marigold-deep">Not yet graded.</p>
               )}
             </div>
-            <button type="button" className={btnSecondary} onClick={() => setSelectedAttemptDetail(null)}>
-              Close
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedAttemptDetail.status === "graded" ? (
+                <ExportGradePdfButton
+                  attempt={selectedAttemptDetail}
+                  studentName={studentLabel(selectedAttemptDetail.student_id)}
+                  label="Share PDF"
+                  compact
+                />
+              ) : null}
+              <button type="button" className={btnSecondary} onClick={() => setSelectedAttemptDetail(null)}>
+                Close
+              </button>
+            </div>
           </div>
           <div className="mt-4 space-y-3 border-t border-line-soft pt-4">
             <p className="text-sm font-semibold text-ink">Question breakdown</p>

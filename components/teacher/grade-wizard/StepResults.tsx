@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Badge, Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
+import ExportGradePdfButton from "@/components/shared/ExportGradePdfButton";
+import { handleJson } from "@/lib/dashboard-client";
+import type { GradedAttemptDetail } from "@/lib/dashboard-types";
 import type { RosterEntry, StackCommitResult } from "@/lib/types";
 
 type StepResultsProps = {
@@ -16,6 +19,13 @@ function ratioColor(ratio: number): string {
   if (ratio >= 0.8) return "text-moss-deep";
   if (ratio >= 0.5) return "text-ink";
   return "text-pen";
+}
+
+async function fetchAttempt(attemptId: string): Promise<GradedAttemptDetail> {
+  const payload = await handleJson<{ attempt: GradedAttemptDetail }>(
+    await fetch(`/api/submissions/${attemptId}`, { cache: "no-store" }),
+  );
+  return payload.attempt;
 }
 
 export default function StepResults({
@@ -106,7 +116,7 @@ export default function StepResults({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-3">
                   <p className={`font-hand -rotate-2 text-3xl font-bold ${ratioColor(ratio)}`}>
                     {row.totalMarks}/{row.maxMarks}
                   </p>
@@ -115,6 +125,13 @@ export default function StepResults({
                   ) : (
                     <Badge variant="blue">Updated</Badge>
                   )}
+                  <ExportGradePdfButton
+                    attemptId={row.attemptId}
+                    studentName={name}
+                    fetchAttempt={fetchAttempt}
+                    label="Share PDF"
+                    compact
+                  />
                   <button
                     type="button"
                     onClick={() => toggle(row.studentId)}
