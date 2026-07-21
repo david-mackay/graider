@@ -26,6 +26,17 @@ function formatRemaining(ms: number): string {
   return `${minutes}:${pad(seconds)}`;
 }
 
+function formatClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function TestTakingForm({
   test,
   answers,
@@ -67,33 +78,48 @@ export default function TestTakingForm({
   const isCritical = remainingMs !== null && remainingMs <= 60_000;
   const isWarning = remainingMs !== null && remainingMs <= 5 * 60_000 && remainingMs > 60_000;
 
+  const timerTone =
+    remainingMs === null
+      ? "bg-paper text-ink-soft ring-line"
+      : isCritical
+        ? "bg-pen text-white ring-pen"
+        : isWarning
+          ? "bg-marigold-wash text-marigold-deep ring-marigold/40"
+          : "bg-paper text-ink ring-line";
+
   return (
     <div className="fixed inset-0 z-50 bg-cream overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-4 py-8">
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-pen">In progress</p>
-            <h2 className="mt-1 font-display text-2xl font-semibold text-ink">{test.title}</h2>
-            <p className="mt-1 text-sm text-ink-faint">
-              {test.questions.length} question{test.questions.length !== 1 ? "s" : ""} · {totalMarks} marks
-              {durationMinutes && durationMinutes > 0 ? ` · ${durationMinutes} min limit` : ""}
-            </p>
+      <div
+        className={`sticky top-0 z-10 border-b px-4 py-3 backdrop-blur-sm ${
+          isCritical
+            ? "border-pen/30 bg-pen-wash/90"
+            : isWarning
+              ? "border-marigold/30 bg-marigold-wash/80"
+              : "border-line bg-cream/95"
+        }`}
+      >
+        <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-pen">In progress</p>
+            <p className="truncate font-display text-base font-semibold text-ink">{test.title}</p>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            {remainingMs !== null ? (
-              <div
-                aria-live="polite"
-                className={`rounded-full px-3 py-1.5 text-sm font-bold tabular-nums shadow-paper ring-1 ${
-                  isCritical
-                    ? "bg-pen text-white ring-pen"
-                    : isWarning
-                      ? "bg-marigold-wash text-marigold-deep ring-marigold/40"
-                      : "bg-paper text-ink ring-line"
-                }`}
-              >
-                Time left {formatRemaining(remainingMs)}
-              </div>
-            ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              aria-live="polite"
+              aria-atomic="true"
+              className={`rounded-full px-3.5 py-1.5 text-sm font-bold tabular-nums shadow-paper ring-1 ${timerTone}`}
+            >
+              {remainingMs !== null ? (
+                <>
+                  <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide opacity-80">
+                    Time left
+                  </span>
+                  {formatRemaining(remainingMs)}
+                </>
+              ) : (
+                "No time limit"
+              )}
+            </div>
             <button
               type="button"
               onClick={onClose}
@@ -103,6 +129,18 @@ export default function TestTakingForm({
             </button>
           </div>
         </div>
+        {deadlineAt && remainingMs !== null ? (
+          <p className="mx-auto mt-1.5 max-w-2xl text-xs text-ink-faint">
+            Due {formatClock(deadlineAt)}
+            {durationMinutes && durationMinutes > 0 ? ` · ${durationMinutes} min limit` : ""}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <p className="mb-6 text-sm text-ink-faint">
+          {test.questions.length} question{test.questions.length !== 1 ? "s" : ""} · {totalMarks} marks
+        </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -134,6 +172,15 @@ export default function TestTakingForm({
           ))}
           <div className="sticky bottom-4 mt-6">
             <div className="flex gap-3 rounded-2xl border border-line bg-paper/90 backdrop-blur-sm p-3 shadow-card">
+              {remainingMs !== null ? (
+                <div
+                  className={`hidden sm:flex items-center rounded-xl px-3 text-sm font-bold tabular-nums ${
+                    isCritical ? "text-pen" : isWarning ? "text-marigold-deep" : "text-ink-soft"
+                  }`}
+                >
+                  {formatRemaining(remainingMs)}
+                </div>
+              ) : null}
               <button className={`${btnPrimary} flex-1 justify-center py-3`} type="submit" disabled={isBusy}>
                 {isBusy ? "Submitting…" : "Submit test"}
               </button>

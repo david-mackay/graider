@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { IconBook, IconClipboard, IconHome, IconPen, IconUsers } from "@/components/shared/icons";
+import BecomeStudentCard from "@/components/teacher/BecomeStudentCard";
 import { ALL_CLASSES_VALUE } from "@/lib/dashboard-client";
 import type { ActiveView, DashboardClass } from "@/lib/dashboard-types";
 
@@ -21,6 +22,7 @@ type TeacherSidebarProps = {
   activeView: ActiveView;
   onNavigate: (view: ActiveView) => void;
   profileName: string | null;
+  onStatus?: (message: string, type?: "info" | "error") => void;
 };
 
 export default function TeacherSidebar({
@@ -30,6 +32,7 @@ export default function TeacherSidebar({
   activeView,
   onNavigate,
   profileName,
+  onStatus,
 }: TeacherSidebarProps) {
   const activeClass = classes.find((c) => c.id === selectedClassId);
 
@@ -95,6 +98,7 @@ export default function TeacherSidebar({
               <p className="text-xs text-ink-faint">Teacher</p>
             </div>
           </div>
+          <BecomeStudentCard onStatus={onStatus} />
         </div>
       ) : null}
     </div>

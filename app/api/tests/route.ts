@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tests, testQuestions, questionBank, classMemberships } from "@/drizzle/schema";
+import { tests, testQuestions, questionBank, classMemberships, testAttempts } from "@/drizzle/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { TestSummary } from "@/lib/types";
 import { isTestAvailableNow, mapTestScheduleToApi, normalizeTestStatus } from "@/lib/test-availability";
@@ -29,13 +29,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ tests: [] });
     }
 
-    const isTeacherViewer = memberships.some(
-      (m) => m.role === "teacher" && filteredClassIds.includes(m.classId),
-    );
-    // Pure students: hide draft/closed (and outside window). Teachers see all in their classes.
+    // Teachers see all tests in their classes. Students only see administered
+    // (available now) tests, plus any test they already have an attempt on.
     const teacherClassIds = new Set(
       memberships.filter((m) => m.role === "teacher").map((m) => m.classId),
     );
+
+    const studentAttemptRows = await db
+      .select({ testId: testAttempts.testId })
+      .from(testAttempts)
+      .where(eq(testAttempts.studentId, user.id));
+    const attemptTestIds = new Set(studentAttemptRows.map((row) => row.testId));
 
     const data = await db
       .select()
@@ -46,9 +50,8 @@ export async function GET(request: Request) {
     const result: TestSummary[] = data
       .filter((row) => {
         if (teacherClassIds.has(row.classId)) return true;
-        const schedule = mapTestScheduleToApi(row);
-        if (schedule.status === "draft" || schedule.status === "closed") return false;
-        return isTestAvailableNow(row) || schedule.status === "scheduled";
+        if (attemptTestIds.has(row.id)) return true;
+        return isTestAvailableNow(row);
       })
       .map((row) => {
         const schedule = mapTestScheduleToApi(row);
@@ -64,8 +67,6 @@ export async function GET(request: Request) {
           ...schedule,
         };
       });
-
-    void isTeacherViewer;
 
     return NextResponse.json({ tests: result });
   } catch (error) {

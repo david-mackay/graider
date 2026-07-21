@@ -5,7 +5,7 @@ import { Badge, Card, FormField, SectionHeader, btnDanger, btnPrimary, btnSecond
 import { IconBook } from "@/components/shared/icons";
 import PdfImportPanel from "@/components/shared/PdfImportPanel";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
-import type { DashboardQuestion, GroupedQuestions } from "@/lib/dashboard-types";
+import type { DashboardQuestion } from "@/lib/dashboard-types";
 
 type QuestionsViewProps = {
   classId: string | null;
@@ -31,7 +31,9 @@ export default function QuestionsView({
   setBusy,
 }: QuestionsViewProps) {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [groupBy, setGroupBy] = useState<"test" | "topic">("test");
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
+  const [testFilter, setTestFilter] = useState<string | null>(null);
 
   const [prompt, setPrompt] = useState("");
   const [answer, setAnswer] = useState("");
@@ -46,18 +48,49 @@ export default function QuestionsView({
   const [editMarks, setEditMarks] = useState("2");
   const [editQuestionType, setEditQuestionType] = useState<"open" | "mcq">("open");
 
-  const grouped: GroupedQuestions[] = (() => {
+  type QuestionGroup = { key: string; label: string; items: DashboardQuestion[] };
+
+  const groupedByTopic: QuestionGroup[] = (() => {
     const map = new Map<string, DashboardQuestion[]>();
     for (const q of questions) {
       const t = normalizeTopic(q.topic);
       map.set(t, [...(map.get(t) ?? []), q]);
     }
     return Array.from(map.entries())
-      .map(([t, items]) => ({ topic: t, items }))
-      .sort((a, b) => a.topic.localeCompare(b.topic));
+      .map(([t, items]) => ({ key: t, label: t, items }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   })();
 
-  const filteredGroups = topicFilter ? grouped.filter((g) => g.topic === topicFilter) : grouped;
+  const groupedByTest: QuestionGroup[] = (() => {
+    const map = new Map<string, { label: string; items: DashboardQuestion[] }>();
+    const unassigned: DashboardQuestion[] = [];
+    for (const q of questions) {
+      const links = q.tests ?? [];
+      if (links.length === 0) {
+        unassigned.push(q);
+        continue;
+      }
+      for (const test of links) {
+        const existing = map.get(test.id);
+        if (existing) {
+          if (!existing.items.some((item) => item.id === q.id)) existing.items.push(q);
+        } else {
+          map.set(test.id, { label: test.title, items: [q] });
+        }
+      }
+    }
+    const groups = Array.from(map.entries())
+      .map(([key, value]) => ({ key, label: value.label, items: value.items }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (unassigned.length > 0) {
+      groups.push({ key: "__unassigned__", label: "Not in a test", items: unassigned });
+    }
+    return groups;
+  })();
+
+  const grouped = groupBy === "test" ? groupedByTest : groupedByTopic;
+  const activeFilter = groupBy === "test" ? testFilter : topicFilter;
+  const filteredGroups = activeFilter ? grouped.filter((g) => g.key === activeFilter) : grouped;
   const totalMarks = questions.reduce((sum, q) => sum + q.marks, 0);
 
   async function createQuestion(event: FormEvent<HTMLFormElement>) {
@@ -257,29 +290,65 @@ export default function QuestionsView({
             </Card>
           ) : null}
 
-          {grouped.length > 1 ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setTopicFilter(null)}
-                className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
-                  topicFilter === null ? "bg-pen text-white" : "bg-cream text-pen hover:bg-cream-deep"
-                }`}
-              >
-                All topics
-              </button>
-              {grouped.map((g) => (
+          {grouped.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="mr-2 flex rounded-full border border-line bg-paper p-0.5">
                 <button
-                  key={g.topic}
                   type="button"
-                  onClick={() => setTopicFilter(g.topic === topicFilter ? null : g.topic)}
+                  onClick={() => {
+                    setGroupBy("test");
+                    setTopicFilter(null);
+                  }}
                   className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
-                    topicFilter === g.topic ? "bg-pen text-white" : "bg-cream text-pen hover:bg-cream-deep"
+                    groupBy === "test" ? "bg-pen text-white" : "text-ink-soft hover:text-ink"
                   }`}
                 >
-                  {g.topic} <span className="opacity-60">{g.items.length}</span>
+                  By test
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGroupBy("topic");
+                    setTestFilter(null);
+                  }}
+                  className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
+                    groupBy === "topic" ? "bg-pen text-white" : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  By topic
+                </button>
+              </div>
+              {grouped.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => (groupBy === "test" ? setTestFilter(null) : setTopicFilter(null))}
+                    className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
+                      activeFilter === null ? "bg-pen text-white" : "bg-cream text-pen hover:bg-cream-deep"
+                    }`}
+                  >
+                    All
+                  </button>
+                  {grouped.map((g) => (
+                    <button
+                      key={g.key}
+                      type="button"
+                      onClick={() => {
+                        if (groupBy === "test") {
+                          setTestFilter(g.key === testFilter ? null : g.key);
+                        } else {
+                          setTopicFilter(g.key === topicFilter ? null : g.key);
+                        }
+                      }}
+                      className={`cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
+                        activeFilter === g.key ? "bg-pen text-white" : "bg-cream text-pen hover:bg-cream-deep"
+                      }`}
+                    >
+                      {g.label} <span className="opacity-60">{g.items.length}</span>
+                    </button>
+                  ))}
+                </>
+              ) : null}
             </div>
           ) : null}
 
@@ -294,16 +363,16 @@ export default function QuestionsView({
           ) : (
             <div className="space-y-4">
               {filteredGroups.map((group) => (
-                <div key={group.topic}>
+                <div key={group.key}>
                   <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">
                     <span className="flex-1 border-t border-line-soft" />
-                    {group.topic}
+                    {group.label}
                     <span className="text-line font-normal normal-case tracking-normal">{group.items.length}</span>
                     <span className="flex-1 border-t border-line-soft" />
                   </h3>
                   <div className="space-y-2">
                     {group.items.map((q) => (
-                      <Card key={q.id} className="group hover:border-line transition-colors duration-150">
+                      <Card key={`${group.key}-${q.id}`} className="group hover:border-line transition-colors duration-150">
                         {editId === q.id ? (
                           <form onSubmit={saveEdit} className="space-y-3">
                             <p className="text-xs font-semibold text-pen uppercase tracking-wide">Editing question</p>
@@ -353,6 +422,11 @@ export default function QuestionsView({
                                 {q.question_type === "mcq" ? "Correct letter: " : "Answer key: "}
                                 <span className="italic">{q.correct_answer}</span>
                               </p>
+                              {groupBy === "topic" && (q.tests?.length ?? 0) > 0 ? (
+                                <p className="mt-1 text-[11px] text-ink-faint">
+                                  In: {q.tests!.map((t) => t.title).join(", ")}
+                                </p>
+                              ) : null}
                             </div>
                             <div className="flex flex-shrink-0 items-center gap-2">
                               {q.question_type === "mcq" ? <Badge variant="gray">MCQ</Badge> : null}

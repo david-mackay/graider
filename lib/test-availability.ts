@@ -19,8 +19,8 @@ export function normalizeTestStatus(raw: string | null | undefined): TestStatus 
   if (raw === "scheduled" || raw === "open" || raw === "closed" || raw === "draft") {
     return raw;
   }
-  // Legacy rows without status: treat as open so existing classes keep working.
-  return "open";
+  // Unknown / missing status: not administered until a teacher opens or schedules it.
+  return "draft";
 }
 
 /** Whether a student may start (or continue a draft) right now. */
@@ -64,10 +64,6 @@ export function canSubmitAttempt(
   startedAt: Date | string | null | undefined,
   now = new Date(),
 ): { ok: true } | { ok: false; reason: string } {
-  if (!isTestAvailableNow(test, now) && !test.allowLateSubmit) {
-    // Still allow submit if within duration window from start even if window flipped,
-    // unless allowLateSubmit is false and past deadline.
-  }
   const deadline = getAttemptDeadline(test, startedAt);
   if (deadline && now > deadline && !test.allowLateSubmit) {
     return { ok: false, reason: "Time is up for this test." };
@@ -78,6 +74,10 @@ export function canSubmitAttempt(
   }
   if (status === "closed" && !test.allowLateSubmit) {
     return { ok: false, reason: "This test is closed." };
+  }
+  // Window flipped closed but student still inside their duration: allow via deadline check above.
+  if (!isTestAvailableNow(test, now) && !test.allowLateSubmit && !deadline) {
+    return { ok: false, reason: "This test is not available." };
   }
   return { ok: true };
 }

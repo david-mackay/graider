@@ -71,6 +71,8 @@ export async function createDraftTestForAutoDiscovery(params: {
       classId: params.classId,
       teacherId: params.teacherId,
       title: DRAFT_AUTO_DISCOVERY_TITLE,
+      status: "draft",
+      gradesReleased: false,
     })
     .returning({ id: tests.id });
 

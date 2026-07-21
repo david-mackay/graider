@@ -194,6 +194,7 @@ export default function TeacherDashboard() {
     return (
       <ProfileSetup
         initialRole={profileFormRole}
+        lockedRole="teacher"
         onComplete={async ({ full_name, role: nextRole }) => {
           if (nextRole === "student") {
             window.location.href = "/s";
@@ -241,6 +242,7 @@ export default function TeacherDashboard() {
           activeView={activeView}
           onNavigate={navigate}
           profileName={profileName}
+          onStatus={setStatus}
         />
       </aside>
 
@@ -252,6 +254,7 @@ export default function TeacherDashboard() {
           activeView={activeView}
           onNavigate={navigate}
           profileName={profileName}
+          onStatus={setStatus}
         />
       </aside>
 

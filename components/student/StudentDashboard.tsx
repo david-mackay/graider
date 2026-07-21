@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { type AppRole, type TestDetail } from "@/lib/types";
@@ -30,14 +30,12 @@ import AttemptDetailCard from "@/components/student/AttemptDetailCard";
 export default function StudentDashboard() {
   const { isLoaded, isSignedIn } = useUser();
   const searchParams = useSearchParams();
-  const pendingJoinCodeRef = useRef<string | null>(null);
-  const autoJoinAttemptedRef = useRef<string | null>(null);
 
   // ─── State ───────────────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState<string | null>(null);
   const [needsProfile, setNeedsProfile] = useState(false);
   const [profileFormRole, setProfileFormRole] = useState<AppRole>("student");
-
+  const [profileInviteCode, setProfileInviteCode] = useState("");
   const [activeView, setActiveView] = useState<ActiveView>("classes");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [classes, setClasses] = useState<DashboardClass[]>([]);
@@ -163,23 +161,13 @@ export default function StudentDashboard() {
   useEffect(() => {
     const rawCode = searchParams?.get("join")?.trim();
     if (!rawCode) return;
-    pendingJoinCodeRef.current = rawCode;
+    // Prefill only — students enter the code during profile setup or Classes join form.
     setJoinCode((current) => (current ? current : rawCode));
+    setProfileInviteCode((current) => (current ? current : rawCode));
     setActiveView("classes");
   }, [searchParams]);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    if (needsProfile) return;
-    if (!profileName) return;
-    const pending = pendingJoinCodeRef.current;
-    if (!pending) return;
-    if (autoJoinAttemptedRef.current === pending) return;
-    autoJoinAttemptedRef.current = pending;
-    pendingJoinCodeRef.current = null;
-    void submitJoin(pending);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, isSignedIn, needsProfile, profileName]);
+  // Auto-join via deep link removed: invite codes are entered at signup (or Classes).
 
   function navigate(view: ActiveView) {
     setActiveView(view);
@@ -318,6 +306,8 @@ export default function StudentDashboard() {
     return (
       <ProfileSetup
         initialRole={profileFormRole}
+        initialInviteCode={profileInviteCode || joinCode}
+        lockedRole="student"
         onComplete={async ({ full_name, role: nextRole }) => {
           if (nextRole === "teacher") {
             window.location.href = "/t";

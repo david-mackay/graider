@@ -11,7 +11,7 @@ type TestListProps = {
   onViewResult: (attemptId: string) => void;
 };
 
-function formatOpensAt(iso: string | null): string {
+function formatScheduleTime(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -21,6 +21,17 @@ function formatOpensAt(iso: string | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function timingHint(test: DashboardTest): string | null {
+  const parts: string[] = [];
+  if (test.duration_minutes && test.duration_minutes > 0) {
+    parts.push(`${test.duration_minutes} min limit`);
+  }
+  if (test.closes_at) {
+    parts.push(`Closes ${formatScheduleTime(test.closes_at)}`);
+  }
+  return parts.length ? parts.join(" · ") : null;
 }
 
 type Availability =
@@ -41,7 +52,7 @@ function availability(test: DashboardTest, attempt: DashboardAttempt | null): Av
   if (test.status === "scheduled" && test.opens_at) {
     const opensAt = new Date(test.opens_at);
     if (!Number.isNaN(opensAt.getTime()) && opensAt.getTime() > Date.now()) {
-      return { kind: "not_available", label: `Opens ${formatOpensAt(test.opens_at)}` };
+      return { kind: "not_available", label: `Opens ${formatScheduleTime(test.opens_at)}` };
     }
   }
   if (test.status === "closed") return { kind: "not_available", label: "Closed" };
@@ -87,6 +98,7 @@ export default function TestList({ rows, classNameById, onStart, onViewResult }:
     <div className="space-y-3">
       {rows.map(({ test, attempt }) => {
         const avail = availability(test, attempt);
+        const timing = timingHint(test);
         return (
           <Card key={test.id} className="hover:border-line transition-colors duration-150">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -98,6 +110,9 @@ export default function TestList({ rows, classNameById, onStart, onViewResult }:
                   </Badge>
                 </div>
                 <p className="mt-0.5 text-xs text-ink-faint">{classNameById.get(test.class_id) ?? ""}</p>
+                {timing && (avail.kind === "start" || avail.kind === "resume") ? (
+                  <p className="mt-1 text-xs font-medium text-ink-soft">{timing}</p>
+                ) : null}
                 {attempt?.status === "graded" ? (
                   <p className="mt-1 font-hand -rotate-2 text-2xl font-bold text-pen">
                     {attempt.total_marks}/{attempt.max_marks}

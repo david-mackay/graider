@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole, requireClassAccess, getClassMemberships } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { questionBank } from "@/drizzle/schema";
+import { questionBank, testQuestions, tests } from "@/drizzle/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { QuestionBankQuestion } from "@/lib/types";
 
@@ -31,6 +31,29 @@ export async function GET(request: NextRequest) {
       .where(and(...conditions))
       .orderBy(desc(questionBank.updatedAt));
 
+    const questionIds = data.map((row) => row.id);
+    const testLinks =
+      questionIds.length === 0
+        ? []
+        : await db
+            .select({
+              questionId: testQuestions.questionId,
+              testId: tests.id,
+              testTitle: tests.title,
+            })
+            .from(testQuestions)
+            .innerJoin(tests, eq(testQuestions.testId, tests.id))
+            .where(inArray(testQuestions.questionId, questionIds));
+
+    const testsByQuestion = new Map<string, Array<{ id: string; title: string }>>();
+    for (const link of testLinks) {
+      const list = testsByQuestion.get(link.questionId) ?? [];
+      if (!list.some((t) => t.id === link.testId)) {
+        list.push({ id: link.testId, title: link.testTitle });
+      }
+      testsByQuestion.set(link.questionId, list);
+    }
+
     const questions: QuestionBankQuestion[] = data.map((row) => ({
       id: row.id,
       teacher_id: row.teacherId,
@@ -41,6 +64,7 @@ export async function GET(request: NextRequest) {
       topic: row.topic,
       question_type: row.questionType === "mcq" ? "mcq" : "open",
       choices: (row.choices as QuestionBankQuestion["choices"]) ?? null,
+      tests: testsByQuestion.get(row.id) ?? [],
       created_at: row.createdAt?.toISOString() ?? null,
       updated_at: row.updatedAt?.toISOString() ?? null,
     }));

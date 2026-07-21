@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tests, testQuestions, questionBank, classMemberships } from "@/drizzle/schema";
+import { tests, testQuestions, questionBank, classMemberships, testAttempts } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { TestDetail } from "@/lib/types";
 import {
@@ -39,17 +39,23 @@ export async function GET(_request: Request, { params }: RouteContext) {
       )
       .limit(1);
 
-    if (!membership && user.role !== "teacher") {
+    if (!membership) {
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
 
-    const isTeacher = membership?.role === "teacher";
+    const isTeacher = membership.role === "teacher";
     if (isTeacher) {
       await requireClassAccess(test.classId, ["teacher"]);
     } else {
-      const schedule = mapTestScheduleToApi(test);
-      if (schedule.status === "draft" || schedule.status === "closed") {
-        return NextResponse.json({ error: "This test is not available." }, { status: 403 });
+      if (!isTestAvailableNow(test)) {
+        const [existingAttempt] = await db
+          .select({ id: testAttempts.id })
+          .from(testAttempts)
+          .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, user.id)))
+          .limit(1);
+        if (!existingAttempt) {
+          return NextResponse.json({ error: "This test is not available." }, { status: 403 });
+        }
       }
     }
 

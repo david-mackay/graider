@@ -135,11 +135,6 @@ export default function TestAdministerPanel({ test, onUpdated, onStatus, isBusy,
     onStatus("Test is now open.");
   }
 
-  async function closeNow() {
-    await patchTest({ action: "close_now" });
-    onStatus("Test closed.");
-  }
-
   return (
     <Card className="border-line">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -147,16 +142,6 @@ export default function TestAdministerPanel({ test, onUpdated, onStatus, isBusy,
           <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Administer</p>
           <Badge variant={statusVariant(test.status)}>{statusLabel(test.status)}</Badge>
         </div>
-        {test.status === "open" ? (
-          <button
-            type="button"
-            className={btnSecondary}
-            onClick={() => void closeNow()}
-            disabled={isBusy}
-          >
-            Close now
-          </button>
-        ) : null}
       </div>
 
       <div className="mb-4">
@@ -248,14 +233,6 @@ export default function TestAdministerPanel({ test, onUpdated, onStatus, isBusy,
           disabled={isBusy || test.status === "open"}
         >
           Open now
-        </button>
-        <button
-          type="button"
-          className={btnSecondary}
-          onClick={() => void closeNow()}
-          disabled={isBusy || test.status === "closed"}
-        >
-          Close now
         </button>
       </div>
     </Card>

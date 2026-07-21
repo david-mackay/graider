@@ -86,6 +86,7 @@ export default function TestsView({
   const [selectedTest, setSelectedTest] = useState<TestDetail | null>(null);
   const [selectedAttemptDetail, setSelectedAttemptDetail] = useState<GradedAttemptDetail | null>(null);
   const [administerTestId, setAdministerTestId] = useState<string | null>(null);
+  const [enrichTestId, setEnrichTestId] = useState<string | null>(null);
   const [renameTestId, setRenameTestId] = useState<string | null>(null);
   const [renameTestValue, setRenameTestValue] = useState("");
   const [submissionFilter, setSubmissionFilter] = useState<"all" | "submitted" | "graded">("all");
@@ -671,6 +672,7 @@ export default function TestsView({
                 ).length;
                 const totalSubmissions = attemptsInScope.filter((a) => a.test_id === test.id).length;
                 const isAdministering = administerTestId === test.id;
+                const isEnriching = enrichTestId === test.id;
                 return (
                   <Card key={test.id} className="hover:border-line transition-colors duration-150">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -735,6 +737,13 @@ export default function TestsView({
                         >
                           {isAdministering ? "Hide administer" : "Administer"}
                         </button>
+                        <button
+                          className={btnSecondary}
+                          type="button"
+                          onClick={() => setEnrichTestId(isEnriching ? null : test.id)}
+                        >
+                          {isEnriching ? "Hide add PDF" : "Add PDF"}
+                        </button>
                         <button className={btnSecondary} type="button" onClick={() => void viewTest(test.id)}>
                           View
                         </button>
@@ -748,6 +757,19 @@ export default function TestsView({
                           onStatus={onStatus}
                           isBusy={isBusy}
                           setBusy={setBusy}
+                        />
+                      </div>
+                    ) : null}
+                    {isEnriching && classId ? (
+                      <div className="mt-3 border-t border-line-soft pt-3">
+                        <PdfImportPanel
+                          classId={classId}
+                          kind="test"
+                          targetTestId={test.id}
+                          multiple
+                          onComplete={onChanged}
+                          onStatus={onStatus}
+                          disabled={isBusy}
                         />
                       </div>
                     ) : null}

@@ -8,6 +8,8 @@ export async function createContentImportJob(params: {
   classId: string;
   teacherId: string;
   storagePath: string;
+  extraStoragePaths?: string[];
+  targetTestId?: string | null;
   parsePreset?: string | null;
 }) {
   const [row] = await db
@@ -18,6 +20,8 @@ export async function createContentImportJob(params: {
       classId: params.classId,
       teacherId: params.teacherId,
       storagePath: params.storagePath,
+      extraStoragePaths: params.extraStoragePaths ?? [],
+      targetTestId: params.targetTestId ?? null,
       parsePreset: params.parsePreset ?? null,
     })
     .returning();

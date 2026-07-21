@@ -248,6 +248,13 @@ export const contentImportJobs = pgTable(
       .notNull()
       .references(() => appUsers.id, { onDelete: "cascade" }),
     storagePath: text("storage_path").notNull(),
+    /** Extra PDF paths for multi-file imports (questions + answer key, etc.). */
+    extraStoragePaths: text("extra_storage_paths")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** When set, import merges into this existing test instead of creating a new one. */
+    targetTestId: uuid("target_test_id").references(() => tests.id, { onDelete: "set null" }),
     /** DocumentParsePreset id for Reducto parse settings. */
     parsePreset: text("parse_preset"),
     bullmqJobId: text("bullmq_job_id"),

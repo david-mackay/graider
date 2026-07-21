@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import ClerkSignInButton from "@/components/shared/ClerkSignInButton";
+import ClerkAuthButton from "@/components/shared/ClerkAuthButton";
+import StudentAuthEntry from "@/components/marketing/StudentAuthEntry";
 import VaultResumeGate from "@/components/marketing/VaultResumeGate";
+import { setSignupIntent } from "@/lib/signup-intent";
 
 /** A miniature marked paper, built in CSS — the hero's visual anchor. */
 function GradedPaper() {
   return (
     <div className="relative mx-auto h-72 w-60 sm:h-80 sm:w-64" aria-hidden="true">
-      {/* Sheets underneath */}
       <div className="absolute inset-0 -rotate-6 rounded-lg border border-line bg-cream-deep shadow-paper" />
       <div className="absolute inset-0 rotate-3 rounded-lg border border-line bg-cream shadow-paper" />
 
-      {/* Top sheet */}
       <div className="absolute inset-0 -rotate-1 overflow-hidden rounded-lg border border-line bg-paper shadow-card">
         <div className="flex h-full flex-col px-5 py-4">
           <div className="flex items-baseline justify-between">
@@ -67,45 +67,72 @@ const STEPS = [
   },
 ];
 
-export default function LandingPage() {
+type LandingPageProps = {
+  /** Prefill from /s?join=CODE when an unauthenticated student hits a join link. */
+  inviteCode?: string;
+};
+
+export default function LandingPage({ inviteCode }: LandingPageProps) {
   return (
     <div className="min-h-[calc(100vh-3.5rem)] overflow-hidden">
       <VaultResumeGate />
 
-      {/* Hero */}
       <section className="relative">
         <div className="mx-auto grid max-w-5xl items-center gap-12 px-6 pb-20 pt-16 sm:pt-24 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="animate-rise text-center lg:text-left">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-pen">
-              For teachers who grade by hand
-            </p>
-            <h1 className="mt-4 font-display text-5xl font-semibold leading-[1.05] tracking-tight text-ink sm:text-6xl">
-              The stack grades itself.
-            </h1>
-            <p className="mx-auto mt-6 max-w-md text-lg leading-relaxed text-ink-soft lg:mx-0">
-              Upload your test and answer key, photograph the stack, and get
-              marks against <em className="not-italic font-semibold text-ink">your</em> rubric —
-              then hand back a PDF or email with feedback you control.
-            </p>
-            <div className="mt-9 flex flex-col items-center gap-4 sm:flex-row lg:justify-start sm:justify-center">
-              <Link
-                href="/onboarding/hook"
-                className="inline-flex cursor-pointer items-center justify-center rounded-full bg-pen px-8 py-3.5 text-base font-bold text-white shadow-lifted transition-all duration-150 hover:bg-pen-deep active:scale-[0.97]"
-              >
-                Grade your first paper
-              </Link>
-              <ClerkSignInButton mode="modal">
-                <button
-                  type="button"
-                  className="cursor-pointer text-sm font-bold text-ink-soft underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-pen"
-                >
-                  I already have an account
-                </button>
-              </ClerkSignInButton>
-            </div>
-            <p className="mt-4 text-xs text-ink-faint">
-              Free to try — no card, no setup, two minutes.
-            </p>
+            {inviteCode ? (
+              <>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-pen">Student invite</p>
+                <h1 className="mt-4 font-display text-5xl font-semibold leading-[1.05] tracking-tight text-ink sm:text-6xl">
+                  Join your class.
+                </h1>
+                <p className="mx-auto mt-6 max-w-md text-lg leading-relaxed text-ink-soft lg:mx-0">
+                  Sign up or sign in with your invite code — you’ll join as a student, not a teacher.
+                </p>
+                <div className="mx-auto mt-8 max-w-md rounded-2xl border border-line bg-paper p-5 text-left lg:mx-0">
+                  <StudentAuthEntry initialCode={inviteCode} />
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-pen">
+                  For teachers who grade by hand
+                </p>
+                <h1 className="mt-4 font-display text-5xl font-semibold leading-[1.05] tracking-tight text-ink sm:text-6xl">
+                  The stack grades itself.
+                </h1>
+                <p className="mx-auto mt-6 max-w-md text-lg leading-relaxed text-ink-soft lg:mx-0">
+                  Upload your test and answer key, photograph the stack, and get
+                  marks against <em className="not-italic font-semibold text-ink">your</em> rubric —
+                  then hand back a PDF or email with feedback you control.
+                </p>
+                <div className="mt-9 flex flex-col items-center gap-4 sm:flex-row lg:justify-start sm:justify-center">
+                  <Link
+                    href="/onboarding/hook"
+                    onClick={() => setSignupIntent("teacher")}
+                    className="inline-flex cursor-pointer items-center justify-center rounded-full bg-pen px-8 py-3.5 text-base font-bold text-white shadow-lifted transition-all duration-150 hover:bg-pen-deep active:scale-[0.97]"
+                  >
+                    Grade your first paper
+                  </Link>
+                  <ClerkAuthButton
+                    authMode="sign-in"
+                    mode="modal"
+                    fallbackRedirectUrl="/t"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSignupIntent("teacher")}
+                      className="cursor-pointer text-sm font-bold text-ink-soft underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-pen"
+                    >
+                      Teacher sign in
+                    </button>
+                  </ClerkAuthButton>
+                </div>
+                <p className="mt-4 text-xs text-ink-faint">
+                  Free to try — no card, no setup, two minutes.
+                </p>
+              </>
+            )}
           </div>
 
           <div className="animate-rise-slow">
@@ -114,7 +141,26 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How it works */}
+      {!inviteCode ? (
+        <section id="student" className="border-t border-line/70 bg-paper/80">
+          <div className="mx-auto grid max-w-5xl gap-8 px-6 py-14 lg:grid-cols-[1fr_1fr] lg:items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-pen">Students</p>
+              <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink">
+                Joining a class?
+              </h2>
+              <p className="mt-3 max-w-md text-base leading-relaxed text-ink-soft">
+                You need a personal invite code from your teacher. Sign up here so we put you on the
+                student path — not the teacher workspace.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-line bg-cream/50 p-5">
+              <StudentAuthEntry />
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="border-t border-line/70 bg-paper/60">
         <div className="mx-auto max-w-5xl px-6 py-20">
           <p className="text-center text-xs font-bold uppercase tracking-[0.22em] text-ink-faint">
@@ -141,7 +187,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Final CTA */}
       <section className="bg-ink">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
           <p className="font-hand text-2xl text-gold">Sunday evening, 7pm. A stack of 28 papers.</p>
@@ -155,6 +200,7 @@ export default function LandingPage() {
           <div className="mt-9">
             <Link
               href="/onboarding/hook"
+              onClick={() => setSignupIntent("teacher")}
               className="inline-flex cursor-pointer items-center justify-center rounded-full bg-pen px-8 py-3.5 text-base font-bold text-white shadow-lifted transition-all duration-150 hover:bg-pen-deep active:scale-[0.97]"
             >
               Try it on one paper

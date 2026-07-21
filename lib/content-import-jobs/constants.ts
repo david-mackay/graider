@@ -8,7 +8,7 @@ export const CONTENT_IMPORT_JOB_QUESTION_BANK = "question_bank";
 export const CONTENT_IMPORT_JOB_TEST = "test";
 
 export const CONTENT_IMPORT_WORKER_CONCURRENCY = Number.parseInt(
-  process.env.CONTENT_IMPORT_WORKER_CONCURRENCY ?? "2",
+  process.env.CONTENT_IMPORT_WORKER_CONCURRENCY ?? "4",
   10,
 );
 

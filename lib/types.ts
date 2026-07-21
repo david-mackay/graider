@@ -36,6 +36,8 @@ export type QuestionBankQuestion = {
   topic?: string | null;
   question_type?: "open" | "mcq";
   choices?: Array<{ key: string; text: string }> | null;
+  /** Tests that include this question (for bank grouping). */
+  tests?: Array<{ id: string; title: string }>;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -287,10 +289,15 @@ export type ParsedImportQuestion = {
   topic?: string | null;
   question_type?: "open" | "mcq";
   choices?: Array<{ key: string; text: string }> | null;
+  /** 1-based printed question number when available. */
+  question_number?: number | null;
 };
 
 export type ContentImportResult = {
   questionsCreated?: number;
+  questionsUpdated?: number;
+  questionsMatched?: number;
   testId?: string;
   testTitle?: string;
+  enriched?: boolean;
 };

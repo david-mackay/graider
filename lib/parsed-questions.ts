@@ -20,6 +20,9 @@ export function normalizeParsedQuestions(raw: unknown): ParsedImportQuestion[] {
       typeof record.topic === "string" && record.topic.trim() ? record.topic.trim() : null;
     const questionType =
       record.question_type === "mcq" || record.questionType === "mcq" ? "mcq" : "open";
+    const numberRaw = Number(record.question_number ?? record.questionNumber ?? record.number);
+    const questionNumber =
+      Number.isFinite(numberRaw) && numberRaw > 0 ? Math.floor(numberRaw) : null;
     const choicesRaw = record.choices;
     let choices: ParsedImportQuestion["choices"] = null;
     if (Array.isArray(choicesRaw) && choicesRaw.length > 0) {
@@ -42,12 +45,13 @@ export function normalizeParsedQuestions(raw: unknown): ParsedImportQuestion[] {
     // Best-effort: keep rows that have at least a prompt OR a correct answer.
     if (!prompt && !correctAnswer) continue;
     results.push({
-      prompt: prompt || (correctAnswer ? `Question ${results.length + 1}` : ""),
+      prompt: prompt || (correctAnswer ? `Question ${questionNumber ?? results.length + 1}` : ""),
       correct_answer: correctAnswer || (questionType === "mcq" ? "" : "—"),
       marks: questionType === "mcq" ? Math.max(1, marks || 1) : marks || 1,
       topic,
       question_type: questionType,
       choices,
+      question_number: questionNumber,
     });
   }
   return results;

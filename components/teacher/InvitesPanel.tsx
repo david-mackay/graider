@@ -33,11 +33,6 @@ function formatExpiry(invite: Invitation): string {
   return `Expires in ${diffDays} days`;
 }
 
-function joinLinkForCode(code: string): string {
-  if (typeof window === "undefined") return `/s?join=${encodeURIComponent(code)}`;
-  return `${window.location.origin}/s?join=${encodeURIComponent(code)}`;
-}
-
 export default function InvitesPanel({
   classId,
   invitations,
@@ -49,7 +44,6 @@ export default function InvitesPanel({
   const [inviteExpiry, setInviteExpiry] = useState("0");
   const [inviteSingleUse, setInviteSingleUse] = useState(true);
   const [copiedId, setCopiedId] = useState("");
-  const [copiedLinkId, setCopiedLinkId] = useState("");
 
   async function generateInvite(role: "student" | "teacher") {
     setBusy(true);
@@ -99,18 +93,8 @@ export default function InvitesPanel({
     try {
       await navigator.clipboard.writeText(code);
       setCopiedId(id);
+      onStatus("Invite code copied. Students enter it when signing up.");
       window.setTimeout(() => setCopiedId((c) => (c === id ? "" : c)), 2000);
-    } catch (error) {
-      if (error instanceof Error) onStatus(error.message, "error");
-    }
-  }
-
-  async function copyJoinLink(id: string, code: string) {
-    try {
-      await navigator.clipboard.writeText(joinLinkForCode(code));
-      setCopiedLinkId(id);
-      onStatus("Join link copied to clipboard.");
-      window.setTimeout(() => setCopiedLinkId((c) => (c === id ? "" : c)), 2000);
     } catch (error) {
       if (error instanceof Error) onStatus(error.message, "error");
     }
@@ -192,12 +176,12 @@ export default function InvitesPanel({
                     <>
                       <button
                         type="button"
-                        onClick={() => void copyJoinLink(inv.id, inv.code)}
+                        onClick={() => void copyCode(inv.id, inv.code)}
                         className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-ink-soft hover:bg-cream hover:text-pen-deep transition-colors duration-150"
-                        title="Copy join link"
-                        aria-label="Copy join link"
+                        title="Copy invite code"
+                        aria-label="Copy invite code"
                       >
-                        {copiedLinkId === inv.id ? (
+                        {copiedId === inv.id ? (
                           <>
                             <IconCheck className="h-3 w-3 text-moss" />
                             <span className="text-[10px] font-semibold uppercase tracking-wide">Copied</span>
@@ -205,21 +189,8 @@ export default function InvitesPanel({
                         ) : (
                           <>
                             <IconCopy className="h-3 w-3" />
-                            <span className="text-[10px] font-semibold uppercase tracking-wide">Link</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide">Code</span>
                           </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void copyCode(inv.id, inv.code)}
-                        className="cursor-pointer inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-ink-soft hover:bg-cream hover:text-pen-deep transition-colors duration-150"
-                        title="Copy code"
-                        aria-label="Copy invite code"
-                      >
-                        {copiedId === inv.id ? (
-                          <IconCheck className="h-3 w-3 text-moss" />
-                        ) : (
-                          <IconCopy className="h-3 w-3" />
                         )}
                       </button>
                     </>

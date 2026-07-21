@@ -250,13 +250,14 @@ export default function StudentsView({
 
   async function copyInvite(invite: Invitation) {
     try {
-      const link = `${window.location.origin}/s?join=${invite.code}`;
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(invite.code);
       setCopiedId(invite.id);
-      onStatus(`Invite link copied for ${invite.invited_name ?? "student"}.`);
+      onStatus(
+        `Invite code copied for ${invite.invited_name ?? "student"}. They sign up and enter this code.`,
+      );
       setTimeout(() => setCopiedId((id) => (id === invite.id ? "" : id)), 2000);
     } catch {
-      onStatus("Could not copy invite link.", "error");
+      onStatus("Could not copy invite code.", "error");
     }
   }
 
@@ -303,7 +304,7 @@ export default function StudentsView({
             </p>
             <p className="text-xs text-ink-faint">
               {composeMode === "invite"
-                ? "Creates a single-use invite tied to this name. They join Graider with the code or link."
+                ? "Creates a single-use invite tied to this name. Share the code — they enter it when signing up as a student."
                 : "Adds a roster name for paper grading now. They won’t have a login until you invite them."}
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -378,7 +379,7 @@ export default function StudentsView({
                       type="button"
                       className={btnSecondary}
                       onClick={() => void copyInvite(invite)}
-                      aria-label="Copy invite link"
+                      aria-label="Copy invite code"
                     >
                       {copiedId === invite.id ? (
                         <span className="inline-flex items-center gap-1">
@@ -386,7 +387,7 @@ export default function StudentsView({
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1">
-                          <IconCopy className="h-3.5 w-3.5" /> Copy link
+                          <IconCopy className="h-3.5 w-3.5" /> Copy code
                         </span>
                       )}
                     </button>
