@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
 import type { TestDetail } from "@/lib/types";
 
@@ -8,10 +8,23 @@ type TestTakingFormProps = {
   test: TestDetail;
   answers: Record<string, string>;
   onChangeAnswer: (questionId: string, value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (opts?: { timedOut?: boolean }) => Promise<void> | void;
   onClose: () => void;
   isBusy: boolean;
+  deadlineAt: string | null;
+  durationMinutes: number | null;
 };
+
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return "0:00";
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (hours > 0) return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  return `${minutes}:${pad(seconds)}`;
+}
 
 export default function TestTakingForm({
   test,
@@ -20,8 +33,39 @@ export default function TestTakingForm({
   onSubmit,
   onClose,
   isBusy,
+  deadlineAt,
+  durationMinutes,
 }: TestTakingFormProps) {
   const totalMarks = test.questions.reduce((sum, q) => sum + q.marks, 0);
+
+  const deadlineMs = useMemo(() => {
+    if (!deadlineAt) return null;
+    const d = new Date(deadlineAt);
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }, [deadlineAt]);
+
+  const [now, setNow] = useState(() => Date.now());
+  const timedOutFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (!deadlineMs) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [deadlineMs]);
+
+  const remainingMs = deadlineMs ? deadlineMs - now : null;
+
+  useEffect(() => {
+    if (remainingMs === null) return;
+    if (remainingMs > 0) return;
+    if (timedOutFiredRef.current) return;
+    if (isBusy) return;
+    timedOutFiredRef.current = true;
+    void onSubmit({ timedOut: true });
+  }, [remainingMs, isBusy, onSubmit]);
+
+  const isCritical = remainingMs !== null && remainingMs <= 60_000;
+  const isWarning = remainingMs !== null && remainingMs <= 5 * 60_000 && remainingMs > 60_000;
 
   return (
     <div className="fixed inset-0 z-50 bg-cream overflow-y-auto">
@@ -32,17 +76,40 @@ export default function TestTakingForm({
             <h2 className="mt-1 font-display text-2xl font-semibold text-ink">{test.title}</h2>
             <p className="mt-1 text-sm text-ink-faint">
               {test.questions.length} question{test.questions.length !== 1 ? "s" : ""} · {totalMarks} marks
+              {durationMinutes && durationMinutes > 0 ? ` · ${durationMinutes} min limit` : ""}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer rounded-xl border border-line bg-paper px-3 py-2 text-sm font-medium text-ink-soft hover:bg-cream transition-colors duration-150"
-          >
-            Exit test
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            {remainingMs !== null ? (
+              <div
+                aria-live="polite"
+                className={`rounded-full px-3 py-1.5 text-sm font-bold tabular-nums shadow-paper ring-1 ${
+                  isCritical
+                    ? "bg-pen text-white ring-pen"
+                    : isWarning
+                      ? "bg-marigold-wash text-marigold-deep ring-marigold/40"
+                      : "bg-paper text-ink ring-line"
+                }`}
+              >
+                Time left {formatRemaining(remainingMs)}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="cursor-pointer rounded-xl border border-line bg-paper px-3 py-2 text-sm font-medium text-ink-soft hover:bg-cream transition-colors duration-150"
+            >
+              Exit (save draft)
+            </button>
+          </div>
         </div>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void onSubmit();
+          }}
+          className="space-y-4"
+        >
           {test.questions.map((q, i) => (
             <Card key={q.question_id} className="border-line-soft">
               <label className="block">
@@ -71,7 +138,7 @@ export default function TestTakingForm({
                 {isBusy ? "Submitting…" : "Submit test"}
               </button>
               <button className={btnSecondary} type="button" onClick={onClose}>
-                Cancel
+                Exit
               </button>
             </div>
           </div>

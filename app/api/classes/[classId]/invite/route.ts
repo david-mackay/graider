@@ -29,9 +29,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
         role: classInvitations.role,
         status: classInvitations.status,
         invitedEmail: classInvitations.invitedEmail,
+        invitedName: classInvitations.invitedName,
         expiresAt: classInvitations.expiresAt,
         createdAt: classInvitations.createdAt,
         studentId: classInvitations.studentId,
+        singleUse: classInvitations.singleUse,
         acceptedByName: appUsers.fullName,
       })
       .from(classInvitations)
@@ -45,9 +47,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
       role: row.role,
       status: row.status,
       invited_email: row.invitedEmail,
+      invited_name: row.invitedName,
       expires_at: row.expiresAt?.toISOString() ?? null,
       created_at: row.createdAt?.toISOString() ?? null,
-      accepted_by_name: row.acceptedByName ?? null,
+      accepted_by_name: row.acceptedByName ?? row.invitedName ?? null,
+      single_use: row.singleUse,
     }));
 
     return NextResponse.json({ invitations });
@@ -71,11 +75,26 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     const payload = (await request.json()) as Partial<{
       invited_email: string;
+      invited_name: string;
       role: string;
       expires_in_days: number;
+      single_use: boolean;
     }>;
-    const invitedEmail = payload.invited_email?.trim().toLowerCase() || null;
     const role = payload.role === "teacher" ? "teacher" : "student";
+    const invitedEmail = payload.invited_email?.trim().toLowerCase() || null;
+    const invitedName = payload.invited_name?.trim() || null;
+
+    if (role === "student") {
+      if (!invitedName) {
+        return NextResponse.json(
+          { error: "Student invites must include a name." },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Student invites are always single-use and name-bound.
+    const singleUse = role === "student" ? true : payload.single_use !== false;
 
     let expiresAt: Date | null = null;
     if (typeof payload.expires_in_days === "number" && payload.expires_in_days > 0) {
@@ -88,15 +107,19 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       .values({
         classId,
         invitedEmail,
+        invitedName,
         invitationCode,
         invitedBy: teacher.id,
         role,
         expiresAt,
+        singleUse,
       })
       .returning({
         invitationCode: classInvitations.invitationCode,
         role: classInvitations.role,
         expiresAt: classInvitations.expiresAt,
+        singleUse: classInvitations.singleUse,
+        invitedName: classInvitations.invitedName,
       });
 
     if (!inserted) {
@@ -106,8 +129,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({
       invitation_code: inserted.invitationCode,
       invited_email: invitedEmail,
+      invited_name: inserted.invitedName,
       role: inserted.role,
       expires_at: inserted.expiresAt?.toISOString() ?? null,
+      single_use: inserted.singleUse,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";

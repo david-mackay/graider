@@ -1,7 +1,13 @@
 import Reducto, { toFile } from "reductoai";
 import { normalizeParsedQuestions } from "@/lib/parsed-questions";
+import {
+  coerceParsePreset,
+  mapPresetToReducto,
+  type DocumentParsePreset,
+} from "@/lib/parse-presets";
 import type { OcrAnswer, OcrPage, ParsedImportQuestion } from "@/lib/types";
 
+export type { DocumentParsePreset } from "@/lib/parse-presets";
 export type ImagePayload = {
   filename: string;
   mimeType: string;
@@ -168,21 +174,23 @@ async function extractWithSchema(params: {
   fileIds: string[];
   schema: unknown;
   systemPrompt: string;
-  /** Use for long answer keys / banks (100+ rows). Higher cost/latency. */
-  deepExtract?: boolean;
+  preset: DocumentParsePreset;
 }): Promise<Record<string, unknown>> {
   const client = getClient();
   const input = params.fileIds.length === 1 ? params.fileIds[0] : params.fileIds;
+  const mapping = mapPresetToReducto(params.preset);
+  const systemPrompt = `${params.systemPrompt} ${mapping.promptSuffix}`.trim();
+
   const response = await client.extract.run({
     input,
     instructions: {
       schema: params.schema,
-      system_prompt: params.systemPrompt,
+      system_prompt: systemPrompt,
     },
     parsing: {
       enhance: {
-        agentic: [{ scope: "text" }],
-        intelligent_ordering: true,
+        agentic: mapping.agenticText ? [{ scope: "text" as const }] : [],
+        intelligent_ordering: mapping.intelligentOrdering,
       },
       settings: {
         extraction_mode: "hybrid",
@@ -191,8 +199,8 @@ async function extractWithSchema(params: {
     },
     settings: {
       array_extract: true,
-      include_images: true,
-      deep_extract: Boolean(params.deepExtract),
+      include_images: mapping.includeImages,
+      deep_extract: mapping.deepExtract,
     },
   });
 
@@ -208,21 +216,26 @@ async function extractWithSchema(params: {
  */
 export async function extractAnswerKeyQuestions(
   inputs: ReductoUploadInput[],
+  preset: DocumentParsePreset = "typed_pdf",
 ): Promise<ParsedImportQuestion[]> {
   const fileIds = await uploadFiles(inputs);
   const data = await extractWithSchema({
     fileIds,
     schema: QUESTIONS_SCHEMA,
     systemPrompt: ANSWER_KEY_SYSTEM_PROMPT,
-    deepExtract: true,
+    preset: coerceParsePreset(preset, "answer_key_pdf"),
   });
   return normalizeParsedQuestions(data.questions);
 }
 
 export async function extractQuestionBankFromDocument(
   input: ReductoUploadInput,
+  preset: DocumentParsePreset = "typed_pdf",
 ): Promise<ParsedImportQuestion[]> {
-  const questions = await extractAnswerKeyQuestions([input]);
+  const questions = await extractAnswerKeyQuestions(
+    [input],
+    coerceParsePreset(preset, "question_bank_import"),
+  );
   if (questions.length === 0) {
     throw new Error("No questions found in the PDF.");
   }
@@ -231,6 +244,7 @@ export async function extractQuestionBankFromDocument(
 
 export async function extractTestFromDocument(
   input: ReductoUploadInput,
+  preset: DocumentParsePreset = "typed_pdf",
 ): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
   const fileIds = await uploadFiles([input]);
   const data = await extractWithSchema({
@@ -239,7 +253,7 @@ export async function extractTestFromDocument(
     systemPrompt:
       ANSWER_KEY_SYSTEM_PROMPT +
       " Also extract the test title from the header when present.",
-    deepExtract: true,
+    preset: coerceParsePreset(preset, "test_import"),
   });
   const title =
     typeof data.title === "string" && data.title.trim()
@@ -407,13 +421,18 @@ function clampConfidence(value: unknown): number {
 }
 
 /** Flat Q/A extraction for a single attempt / onboarding sample grade. */
-export async function extractHandwrittenAnswers(images: ImagePayload[]): Promise<OcrAnswer[]> {
+export async function extractHandwrittenAnswers(
+  images: ImagePayload[],
+  preset: DocumentParsePreset = "circled_mcq",
+): Promise<OcrAnswer[]> {
   if (images.length === 0) return [];
+  const resolved = coerceParsePreset(preset, "student_ocr");
   const fileIds = await uploadFiles(imagesToUploads(images));
   const data = await extractWithSchema({
     fileIds,
     schema: FLAT_ANSWERS_SCHEMA,
     systemPrompt: STUDENT_PAPER_OCR_PROMPT,
+    preset: resolved,
   });
   return coerceOcrAnswers(data.answers);
 }
@@ -422,8 +441,12 @@ export async function extractHandwrittenAnswers(images: ImagePayload[]): Promise
  * Stack OCR: one page per image, with handwritten name + answers.
  * Used when the teacher uploads a mixed pile of papers.
  */
-export async function extractHandwrittenStack(images: ImagePayload[]): Promise<OcrPage[]> {
+export async function extractHandwrittenStack(
+  images: ImagePayload[],
+  preset: DocumentParsePreset = "circled_mcq",
+): Promise<OcrPage[]> {
   if (images.length === 0) return [];
+  const resolved = coerceParsePreset(preset, "grade_stack");
   const fileIds = await uploadFiles(imagesToUploads(images));
   const data = await extractWithSchema({
     fileIds,
@@ -434,6 +457,7 @@ export async function extractHandwrittenStack(images: ImagePayload[]): Promise<O
       "Return exactly one pages entry per image in the same order. " +
       "Also read the student's handwritten name at the top of each page. " +
       "If the name is clear use confidence ≥ 0.9; messy but guessable 0.4–0.7; missing/unreadable → empty studentName and confidence 0.",
+    preset: resolved,
   });
 
   const pageEntries = Array.isArray(data.pages) ? data.pages : [];
@@ -459,8 +483,10 @@ export async function extractHandwrittenStack(images: ImagePayload[]): Promise<O
 export async function extractHandwrittenStudentBucket(
   images: ImagePayload[],
   globalPageIndices: number[],
+  preset: DocumentParsePreset = "circled_mcq",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
+  const resolved = coerceParsePreset(preset, "grade_stack");
   const fileIds = await uploadFiles(imagesToUploads(images));
   const indexList = globalPageIndices.join(", ");
   const data = await extractWithSchema({
@@ -471,6 +497,7 @@ export async function extractHandwrittenStudentBucket(
       ` These ${images.length} page(s) belong to ONE student already assigned by the teacher — do NOT read or guess any student name. ` +
       `Use these global pageIndex values exactly, in order: ${indexList}. ` +
       "Return exactly one pages entry per image.",
+    preset: resolved,
   });
 
   const pageEntries = Array.isArray(data.pages) ? data.pages : [];
@@ -494,8 +521,10 @@ export async function extractHandwrittenStudentBucket(
 export async function extractStudentFirstPreview(
   images: ImagePayload[],
   assignments: { pageIndex: number; studentId: string }[],
+  preset: DocumentParsePreset = "circled_mcq",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
+  const resolved = coerceParsePreset(preset, "grade_stack");
 
   const byStudent = new Map<string, number[]>();
   for (const assignment of [...assignments].sort((a, b) => a.pageIndex - b.pageIndex)) {
@@ -507,7 +536,7 @@ export async function extractStudentFirstPreview(
   const pageResults = new Map<number, OcrPage>();
   for (const pageIndices of byStudent.values()) {
     const studentImages = pageIndices.map((index) => images[index]).filter(Boolean);
-    const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices);
+    const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices, resolved);
     for (const page of pages) {
       pageResults.set(page.pageIndex, page);
     }
@@ -526,10 +555,12 @@ export async function extractStudentFirstPreview(
 /** Discover test title + questions from photographed student papers. */
 export async function parseTestFromStackImages(
   images: ImagePayload[],
+  preset: DocumentParsePreset = "circled_mcq",
 ): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
   if (images.length === 0) {
     throw new Error("At least one image is required to detect a test.");
   }
+  const resolved = coerceParsePreset(preset, "grade_stack");
   const fileIds = await uploadFiles(imagesToUploads(images));
   const data = await extractWithSchema({
     fileIds,
@@ -543,7 +574,7 @@ export async function parseTestFromStackImages(
       "Use printed mark values when present; otherwise default marks sensibly. " +
       "Set question_type to mcq when options A–E appear; otherwise open. Include choices when visible. " +
       "Extract every question — do not truncate.",
-    deepExtract: true,
+    preset: resolved,
   });
   const title =
     typeof data.title === "string" && data.title.trim()

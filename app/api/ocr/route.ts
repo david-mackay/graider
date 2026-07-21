@@ -3,6 +3,7 @@ import { Buffer } from "buffer";
 import { requireRole, requireClassAccess } from "@/lib/auth";
 import { uploadFile } from "@/lib/storage";
 import { extractHandwrittenAnswers } from "@/lib/reducto";
+import { coerceParsePreset } from "@/lib/parse-presets";
 import { matchOcrAnswersToQuestions } from "@/lib/stack-grading";
 import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, ocrBatches } from "@/drizzle/schema";
@@ -75,7 +76,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const answers = await extractHandwrittenAnswers(imagePayloads);
+    const answers = await extractHandwrittenAnswers(
+      imagePayloads,
+      coerceParsePreset(form.get("parsePreset")?.toString(), "student_ocr"),
+    );
 
     const tqRows = await db
       .select({

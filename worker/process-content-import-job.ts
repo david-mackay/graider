@@ -10,6 +10,7 @@ import {
   extractQuestionBankFromDocument,
   extractTestFromDocument,
 } from "@/lib/reducto";
+import { coerceParsePreset } from "@/lib/parse-presets";
 import { readFile } from "@/lib/storage";
 import type { ContentImportResult, ParsedImportQuestion } from "@/lib/types";
 import path from "path";
@@ -50,12 +51,14 @@ export async function processQuestionBankImportJob(jobId: string) {
   await updateContentImportStatus(jobId, "processing");
   try {
     const buffer = await readFile(job.storagePath);
-    const questions = await extractQuestionBankFromDocument({
-      buffer,
-      filename: filenameFromStoragePath(job.storagePath),
-      mimeType: "application/pdf",
-    });
-    await insertQuestions({
+    const questions = await extractQuestionBankFromDocument(
+      {
+        buffer,
+        filename: filenameFromStoragePath(job.storagePath),
+        mimeType: "application/pdf",
+      },
+      coerceParsePreset(job.parsePreset, "question_bank_import"),
+    );    await insertQuestions({
       teacherId: job.teacherId,
       classId: job.classId,
       questions,
@@ -77,12 +80,14 @@ export async function processTestImportJob(jobId: string) {
   await updateContentImportStatus(jobId, "processing");
   try {
     const buffer = await readFile(job.storagePath);
-    const parsed = await extractTestFromDocument({
-      buffer,
-      filename: filenameFromStoragePath(job.storagePath),
-      mimeType: "application/pdf",
-    });
-    const questionIds = await insertQuestions({
+    const parsed = await extractTestFromDocument(
+      {
+        buffer,
+        filename: filenameFromStoragePath(job.storagePath),
+        mimeType: "application/pdf",
+      },
+      coerceParsePreset(job.parsePreset, "test_import"),
+    );    const questionIds = await insertQuestions({
       teacherId: job.teacherId,
       classId: job.classId,
       questions: parsed.questions,

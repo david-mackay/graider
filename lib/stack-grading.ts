@@ -10,6 +10,7 @@ import {
 } from "@/drizzle/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { extractHandwrittenStack } from "@/lib/reducto";
+import { coerceParsePreset, type DocumentParsePreset } from "@/lib/parse-presets";
 import { gradeOneAttempt } from "@/lib/grading";
 import {
   OcrAnswer,
@@ -295,6 +296,7 @@ export async function previewStack(params: {
   storagePaths: (string | null)[];
   teacherId: string;
   ocrPages?: Awaited<ReturnType<typeof extractHandwrittenStack>>;
+  parsePreset?: DocumentParsePreset | string;
 }): Promise<StackPreview> {
   const { testId, images, storagePaths, ocrPages: precomputedOcrPages } = params;
 
@@ -308,7 +310,12 @@ export async function previewStack(params: {
     throw new Error("TEST_NOT_FOUND");
   }
 
-  const ocrPages = precomputedOcrPages ?? (await extractHandwrittenStack(images));
+  const ocrPages =
+    precomputedOcrPages ??
+    (await extractHandwrittenStack(
+      images,
+      coerceParsePreset(params.parsePreset, "grade_stack"),
+    ));
 
   const pages = await buildStackPreviewPages({
     classId: test.classId,
@@ -430,6 +437,7 @@ export async function commitStack(params: {
         .values({
           testId,
           studentId,
+          source: "teacher_ocr",
           status: "submitted",
           submittedAt: new Date(),
         })

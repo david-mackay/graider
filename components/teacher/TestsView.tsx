@@ -2,10 +2,17 @@
 
 import { FormEvent, useState } from "react";
 import { Badge, Card, FormField, SectionHeader, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
-import { IconClipboard, IconX } from "@/components/shared/icons";
+import { IconClipboard, IconCheck, IconPen, IconX } from "@/components/shared/icons";
 import PdfImportPanel from "@/components/shared/PdfImportPanel";
+import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
+import TestAdministerPanel from "@/components/teacher/TestAdministerPanel";
+import TestViewEditor from "@/components/teacher/TestViewEditor";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
-import type { OcrAnswer, TestDetail } from "@/lib/types";
+import {
+  defaultPresetForSurface,
+  type DocumentParsePreset,
+} from "@/lib/parse-presets";
+import type { OcrAnswer, TestDetail, TestStatus } from "@/lib/types";
 import type {
   ClassMember,
   DashboardAttempt,
@@ -14,6 +21,34 @@ import type {
   GradedAttemptDetail,
   GroupedQuestions,
 } from "@/lib/dashboard-types";
+
+function statusBadgeVariant(status: TestStatus): "blue" | "green" | "gray" | "yellow" {
+  switch (status) {
+    case "open":
+      return "green";
+    case "scheduled":
+      return "blue";
+    case "closed":
+      return "gray";
+    case "draft":
+    default:
+      return "yellow";
+  }
+}
+
+function statusBadgeLabel(status: TestStatus): string {
+  switch (status) {
+    case "open":
+      return "Open";
+    case "scheduled":
+      return "Scheduled";
+    case "closed":
+      return "Closed";
+    case "draft":
+    default:
+      return "Draft";
+  }
+}
 
 type TestsViewProps = {
   classId: string | null;
@@ -50,11 +85,17 @@ export default function TestsView({
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [selectedTest, setSelectedTest] = useState<TestDetail | null>(null);
   const [selectedAttemptDetail, setSelectedAttemptDetail] = useState<GradedAttemptDetail | null>(null);
+  const [administerTestId, setAdministerTestId] = useState<string | null>(null);
+  const [renameTestId, setRenameTestId] = useState<string | null>(null);
+  const [renameTestValue, setRenameTestValue] = useState("");
   const [submissionFilter, setSubmissionFilter] = useState<"all" | "submitted" | "graded">("all");
 
   const [ocrFilesByAttempt, setOcrFilesByAttempt] = useState<Record<string, File[]>>({});
   const [ocrFeedback, setOcrFeedback] = useState<Record<string, string>>({});
   const [expandedOcrAttemptId, setExpandedOcrAttemptId] = useState<string | null>(null);
+  const [ocrParsePreset, setOcrParsePreset] = useState<DocumentParsePreset>(() =>
+    defaultPresetForSurface("student_ocr"),
+  );
 
   const filteredAttempts =
     submissionFilter === "all" ? attemptsInScope : attemptsInScope.filter((a) => a.status === submissionFilter);
@@ -90,7 +131,7 @@ export default function TestsView({
     }
     setBusy(true);
     try {
-      await handleJson(
+      const payload = await handleJson<{ testId: string }>(
         await fetch("/api/tests", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -99,6 +140,7 @@ export default function TestsView({
       );
       setTestTitle("");
       setSelectedQuestionIds([]);
+      if (payload.testId) setAdministerTestId(payload.testId);
       onStatus("Test created.");
       await onChanged();
     } catch (error) {
@@ -108,7 +150,7 @@ export default function TestsView({
     }
   }
 
-  async function previewTest(testId: string) {
+  async function viewTest(testId: string) {
     try {
       const payload = await handleJson<{ test: TestDetail }>(
         await fetch(`/api/tests/${testId}`, { cache: "no-store" }),
@@ -196,6 +238,45 @@ export default function TestsView({
     }
   }
 
+  function startRenameTest(test: DashboardTest) {
+    setRenameTestId(test.id);
+    setRenameTestValue(test.title);
+  }
+
+  function cancelRenameTest() {
+    setRenameTestId(null);
+    setRenameTestValue("");
+  }
+
+  async function submitRenameTest(test: DashboardTest, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextTitle = renameTestValue.trim();
+    if (!nextTitle || nextTitle === test.title) {
+      cancelRenameTest();
+      return;
+    }
+    setBusy(true);
+    try {
+      await handleJson(
+        await fetch(`/api/tests/${test.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: nextTitle }),
+        }),
+      );
+      onStatus(`Test renamed to “${nextTitle}”.`);
+      cancelRenameTest();
+      if (selectedTest?.id === test.id) {
+        setSelectedTest({ ...selectedTest, title: nextTitle });
+      }
+      await onChanged();
+    } catch (error) {
+      if (error instanceof Error) onStatus(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runOcrForAttempt(attemptId: string) {
     const files = ocrFilesByAttempt[attemptId] ?? [];
     if (files.length === 0) {
@@ -205,6 +286,7 @@ export default function TestsView({
     setBusy(true);
     const formData = new FormData();
     formData.append("attemptId", attemptId);
+    formData.append("parsePreset", ocrParsePreset);
     for (const file of files) formData.append("images", file);
     try {
       const payload = await handleJson<{ extracted: OcrAnswer[]; matched: number }>(
@@ -368,32 +450,21 @@ export default function TestsView({
       )}
 
       {selectedTest ? (
-        <Card className="border-ink-faint">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Preview</p>
-              <h3 className="mt-0.5 font-semibold text-ink">{selectedTest.title}</h3>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedTest(null)}
-              className="cursor-pointer rounded-lg p-1.5 text-ink-faint hover:bg-cream transition-colors duration-150"
-              aria-label="Close preview"
-            >
-              <IconX className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="space-y-2">
-            {selectedTest.questions.map((q, i) => (
-              <div key={q.question_id} className="rounded-lg border border-line-soft bg-cream p-3">
-                <p className="text-xs font-semibold text-ink-faint">
-                  Q{i + 1} · {q.marks} mark{q.marks !== 1 ? "s" : ""}
-                </p>
-                <p className="mt-0.5 text-sm text-ink">{q.prompt}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <TestViewEditor
+          test={selectedTest}
+          onClose={() => setSelectedTest(null)}
+          onStatus={onStatus}
+          onChanged={async () => {
+            await onChanged();
+            // Refresh editable view with latest question content
+            const payload = await handleJson<{ test: TestDetail }>(
+              await fetch(`/api/tests/${selectedTest.id}`, { cache: "no-store" }),
+            );
+            setSelectedTest(payload.test);
+          }}
+          isBusy={isBusy}
+          setBusy={setBusy}
+        />
       ) : null}
 
       {selectedAttemptDetail ? (
@@ -551,12 +622,19 @@ export default function TestsView({
                         {expandedOcrAttemptId === attempt.id ? "Hide" : "Upload handwritten answers (OCR)"}
                       </button>
                       {expandedOcrAttemptId === attempt.id ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <div className="mt-2 space-y-3">
+                          <ParsePresetPicker
+                            surface="student_ocr"
+                            value={ocrParsePreset}
+                            onChange={setOcrParsePreset}
+                            disabled={isBusy}
+                          />
+                          <div className="flex flex-wrap items-center gap-3">
                           <input
                             type="file"
                             accept="image/*"
                             multiple
-                            aria-label="Upload handwritten answer sheet images"
+                            aria-label="Upload student answer sheet images"
                             className="text-xs text-ink-soft file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-cream file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-pen-deep hover:file:bg-cream-deep"
                             onChange={(e) => {
                               const files = e.target.files ? Array.from(e.target.files) : [];
@@ -574,6 +652,7 @@ export default function TestsView({
                           {ocrFeedback[attempt.id] ? (
                             <p className="text-xs text-ink-soft">{ocrFeedback[attempt.id]}</p>
                           ) : null}
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -591,25 +670,87 @@ export default function TestsView({
                   (a) => a.test_id === test.id && a.status === "submitted",
                 ).length;
                 const totalSubmissions = attemptsInScope.filter((a) => a.test_id === test.id).length;
+                const isAdministering = administerTestId === test.id;
                 return (
                   <Card key={test.id} className="hover:border-line transition-colors duration-150">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-ink">{test.title}</p>
-                          <Badge variant={test.grades_released ? "green" : "gray"}>
-                            {test.grades_released ? "Released" : "Unreleased"}
-                          </Badge>
-                        </div>
+                        {renameTestId === test.id ? (
+                          <form
+                            onSubmit={(event) => void submitRenameTest(test, event)}
+                            className="flex flex-wrap items-center gap-2"
+                          >
+                            <input
+                              className={`${inputClass} min-w-[12rem]`}
+                              value={renameTestValue}
+                              onChange={(e) => setRenameTestValue(e.target.value)}
+                              autoFocus
+                              disabled={isBusy}
+                            />
+                            <button
+                              type="submit"
+                              disabled={isBusy}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-paper text-moss hover:bg-cream"
+                              aria-label="Save test name"
+                            >
+                              <IconCheck className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelRenameTest}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-paper text-ink-soft hover:bg-cream"
+                              aria-label="Cancel rename"
+                            >
+                              <IconX className="h-4 w-4" />
+                            </button>
+                          </form>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-ink">{test.title}</p>
+                            <button
+                              type="button"
+                              onClick={() => startRenameTest(test)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-faint hover:bg-cream hover:text-pen-deep"
+                              aria-label={`Rename ${test.title}`}
+                              title="Rename test"
+                            >
+                              <IconPen className="h-3.5 w-3.5" />
+                            </button>
+                            <Badge variant={statusBadgeVariant(test.status)}>{statusBadgeLabel(test.status)}</Badge>
+                            <Badge variant={test.grades_released ? "green" : "gray"}>
+                              {test.grades_released ? "Released" : "Unreleased"}
+                            </Badge>
+                          </div>
+                        )}
                         <p className="text-xs text-ink-faint">
                           {totalSubmissions} submission{totalSubmissions !== 1 ? "s" : ""}
                           {ungradedCount > 0 ? ` · ${ungradedCount} ungraded` : ""}
                         </p>
                       </div>
-                      <button className={btnSecondary} type="button" onClick={() => void previewTest(test.id)}>
-                        Preview
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className={btnSecondary}
+                          type="button"
+                          onClick={() => setAdministerTestId(isAdministering ? null : test.id)}
+                        >
+                          {isAdministering ? "Hide administer" : "Administer"}
+                        </button>
+                        <button className={btnSecondary} type="button" onClick={() => void viewTest(test.id)}>
+                          View
+                        </button>
+                      </div>
                     </div>
+                    {isAdministering ? (
+                      <div className="mt-3 border-t border-line-soft pt-3">
+                        <TestAdministerPanel
+                          test={test}
+                          onUpdated={onChanged}
+                          onStatus={onStatus}
+                          isBusy={isBusy}
+                          setBusy={setBusy}
+                        />
+                      </div>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
                       {ungradedCount > 0 ? (
                         <button

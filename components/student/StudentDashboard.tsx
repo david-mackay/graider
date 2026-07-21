@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { type AppRole, type TestDetail } from "@/lib/types";
 import {
@@ -28,6 +29,9 @@ import AttemptDetailCard from "@/components/student/AttemptDetailCard";
 
 export default function StudentDashboard() {
   const { isLoaded, isSignedIn } = useUser();
+  const searchParams = useSearchParams();
+  const pendingJoinCodeRef = useRef<string | null>(null);
+  const autoJoinAttemptedRef = useRef<string | null>(null);
 
   // ─── State ───────────────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState<string | null>(null);
@@ -42,6 +46,12 @@ export default function StudentDashboard() {
   const [tests, setTests] = useState<DashboardTest[]>([]);
   const [attempts, setAttempts] = useState<DashboardAttempt[]>([]);
   const [selectedTest, setSelectedTest] = useState<TestDetail | null>(null);
+  const [activeAttempt, setActiveAttempt] = useState<{
+    attempt_id: string;
+    started_at: string | null;
+    deadline_at: string | null;
+    duration_minutes: number | null;
+  } | null>(null);
 
   const [testTakingAnswers, setTestTakingAnswers] = useState<Record<string, string>>({});
   const [selectedAttemptDetail, setSelectedAttemptDetail] = useState<GradedAttemptDetail | null>(null);
@@ -150,21 +160,42 @@ export default function StudentDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, isSignedIn, selectedClassId]);
 
+  useEffect(() => {
+    const rawCode = searchParams?.get("join")?.trim();
+    if (!rawCode) return;
+    pendingJoinCodeRef.current = rawCode;
+    setJoinCode((current) => (current ? current : rawCode));
+    setActiveView("classes");
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (needsProfile) return;
+    if (!profileName) return;
+    const pending = pendingJoinCodeRef.current;
+    if (!pending) return;
+    if (autoJoinAttemptedRef.current === pending) return;
+    autoJoinAttemptedRef.current = pending;
+    pendingJoinCodeRef.current = null;
+    void submitJoin(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, isSignedIn, needsProfile, profileName]);
+
   function navigate(view: ActiveView) {
     setActiveView(view);
     setSidebarOpen(false);
   }
 
-  async function joinClass(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!joinCode.trim()) return;
+  async function submitJoin(code: string, email?: string) {
+    const trimmedCode = code.trim();
+    if (!trimmedCode) return;
     setIsBusy(true);
     try {
       await handleJson<{ joined: boolean }>(
         await fetch("/api/classes/join", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ inviteCode: joinCode, email: joinEmail || undefined }),
+          body: JSON.stringify({ inviteCode: trimmedCode, email: email?.trim() || undefined }),
         }),
       );
       setJoinCode("");
@@ -178,19 +209,57 @@ export default function StudentDashboard() {
     }
   }
 
+  async function joinClass(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitJoin(joinCode, joinEmail);
+  }
+
   async function openTestForSubmission(testId: string) {
     try {
-      const payload = await handleJson<{ test: TestDetail }>(
+      const startRes = await fetch("/api/submissions/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testId }),
+      });
+      const startPayload = (await startRes.json()) as {
+        error?: string;
+        attempt_id?: string;
+        started_at?: string | null;
+        deadline_at?: string | null;
+        duration_minutes?: number | null;
+      };
+      if (!startRes.ok) {
+        if (startRes.status === 409) {
+          setStatus(startPayload.error ?? "You have already submitted this test.", "error");
+          await loadDashboard();
+          return;
+        }
+        setStatus(startPayload.error ?? "This test is not available.", "error");
+        return;
+      }
+
+      const detail = await handleJson<{ test: TestDetail }>(
         await fetch(`/api/tests/${testId}`, { cache: "no-store" }),
       );
-      setSelectedTest(payload.test);
+      setSelectedTest(detail.test);
       const initial: Record<string, string> = {};
-      for (const q of payload.test.questions) initial[q.question_id] = "";
+      for (const q of detail.test.questions) initial[q.question_id] = "";
       setTestTakingAnswers(initial);
-      setSelectedClassId(payload.test.class_id);
+      setSelectedClassId(detail.test.class_id);
+      setActiveAttempt({
+        attempt_id: startPayload.attempt_id ?? "",
+        started_at: startPayload.started_at ?? null,
+        deadline_at: startPayload.deadline_at ?? null,
+        duration_minutes: startPayload.duration_minutes ?? null,
+      });
     } catch (error) {
       if (error instanceof Error) setStatus(error.message, "error");
     }
+  }
+
+  function closeTestTaking() {
+    setSelectedTest(null);
+    setActiveAttempt(null);
   }
 
   async function openAttemptDetail(attemptId: string) {
@@ -204,8 +273,7 @@ export default function StudentDashboard() {
     }
   }
 
-  async function submitTest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitTest(opts?: { timedOut?: boolean }) {
     if (!selectedTest) return;
     setIsBusy(true);
     const answers: AttemptAnswerPayload[] = selectedTest.questions.map((q) => ({
@@ -217,11 +285,15 @@ export default function StudentDashboard() {
         await fetch("/api/submissions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ testId: selectedTest.id, answers }),
+          body: JSON.stringify({
+            testId: selectedTest.id,
+            answers,
+            timed_out: opts?.timedOut === true,
+          }),
         }),
       );
-      setStatus("Test submitted successfully!");
-      setSelectedTest(null);
+      setStatus(opts?.timedOut ? "Time is up — your test was submitted." : "Test submitted successfully!");
+      closeTestTaking();
       await loadDashboard();
     } catch (error) {
       if (error instanceof Error) setStatus(error.message, "error");
@@ -339,8 +411,10 @@ export default function StudentDashboard() {
                 answers={testTakingAnswers}
                 onChangeAnswer={(qid, value) => setTestTakingAnswers((c) => ({ ...c, [qid]: value }))}
                 onSubmit={submitTest}
-                onClose={() => setSelectedTest(null)}
+                onClose={closeTestTaking}
                 isBusy={isBusy}
+                deadlineAt={activeAttempt?.deadline_at ?? null}
+                durationMinutes={activeAttempt?.duration_minutes ?? null}
               />
             ) : null}
 

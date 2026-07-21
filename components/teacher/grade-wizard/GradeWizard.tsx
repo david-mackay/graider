@@ -1,30 +1,69 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card, SectionHeader, btnSecondary } from "@/components/shared/ui";
+import { Card, SectionHeader, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { IconCheck } from "@/components/shared/icons";
 import { handleJson } from "@/lib/dashboard-client";
 import type { RosterEntry } from "@/lib/types";
-import { useStackGrade, type WizardState } from "@/components/teacher/grade-wizard/use-stack-grade";
+import {
+  useStudentGrade,
+  type StudentGradeState,
+} from "@/components/teacher/grade-wizard/use-student-grade";
+import {
+  useStackGrade,
+  type WizardState as StackWizardState,
+} from "@/components/teacher/grade-wizard/use-stack-grade";
+import { formatStudentDisplayName } from "@/lib/roster-display";
 import StepPickTest from "@/components/teacher/grade-wizard/StepPickTest";
+import StepPickStudent from "@/components/teacher/grade-wizard/StepPickStudent";
+import StepCapturePages from "@/components/teacher/grade-wizard/StepCapturePages";
+import StepSessionSummary from "@/components/teacher/grade-wizard/StepSessionSummary";
+import StepGradingProgress from "@/components/teacher/grade-wizard/StepGradingProgress";
+import StepStudentReview from "@/components/teacher/grade-wizard/StepStudentReview";
 import StepUploadStack from "@/components/teacher/grade-wizard/StepUploadStack";
 import StepReviewMatches from "@/components/teacher/grade-wizard/StepReviewMatches";
 import StepResults from "@/components/teacher/grade-wizard/StepResults";
 
-type StepDef = {
+type EntryMode = "student_first" | "stack";
+
+type StudentStepDef = {
   id: 1 | 2 | 3 | 4;
   label: string;
-  matches: (state: WizardState) => boolean;
+  matches: (state: StudentGradeState) => boolean;
 };
 
-const STEPS: StepDef[] = [
+type StackStepDef = {
+  id: 1 | 2 | 3 | 4;
+  label: string;
+  matches: (state: StackWizardState) => boolean;
+};
+
+const STUDENT_STEPS: StudentStepDef[] = [
+  { id: 1, label: "Pick test", matches: (s) => s === "pickTest" },
+  {
+    id: 2,
+    label: "Capture",
+    matches: (s) => s === "pickStudent" || s === "capture" || s === "sessionSummary",
+  },
+  { id: 3, label: "Review", matches: (s) => s === "grading" || s === "reviewing" },
+  { id: 4, label: "Results", matches: (s) => s === "results" },
+];
+
+const STACK_STEPS: StackStepDef[] = [
   { id: 1, label: "Pick test", matches: (s) => s === "pickTest" },
   { id: 2, label: "Upload", matches: (s) => s === "uploadStack" || s === "preview-loading" },
   { id: 3, label: "Review", matches: (s) => s === "reviewing" || s === "committing" },
   { id: 4, label: "Results", matches: (s) => s === "results" },
 ];
 
-function activeStepId(state: WizardState): StepDef["id"] {
+function studentActiveId(state: StudentGradeState): 1 | 2 | 3 | 4 {
+  if (state === "pickTest") return 1;
+  if (state === "pickStudent" || state === "capture" || state === "sessionSummary") return 2;
+  if (state === "grading" || state === "reviewing") return 3;
+  return 4;
+}
+
+function stackActiveId(state: StackWizardState): 1 | 2 | 3 | 4 {
   if (state === "pickTest") return 1;
   if (state === "uploadStack" || state === "preview-loading") return 2;
   if (state === "reviewing" || state === "committing") return 3;
@@ -32,17 +71,16 @@ function activeStepId(state: WizardState): StepDef["id"] {
 }
 
 export default function GradeWizard() {
-  const wizard = useStackGrade();
-  const { state, selectedTest, preview, pageFiles, assignments, results, errorMessage, isBusy, actions } =
-    wizard;
+  const [mode, setMode] = useState<EntryMode>("student_first");
+  const studentWizard = useStudentGrade();
+  const stackWizard = useStackGrade();
 
   const [roster, setRoster] = useState<RosterEntry[]>([]);
-  const [rosterLoading, setRosterLoading] = useState<boolean>(false);
-  const [rosterError, setRosterError] = useState<string>("");
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState("");
   const [rosterClassId, setRosterClassId] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
 
-  // Welcome banner after the onboarding funnel hands the teacher over.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("welcome") === "1") {
@@ -53,21 +91,18 @@ export default function GradeWizard() {
     }
   }, []);
 
-  // Object URLs for the uploaded page photos, indexed by pageIndex.
-  const pageImageUrls = useMemo(() => pageFiles.map((file) => URL.createObjectURL(file)), [pageFiles]);
-  useEffect(() => {
-    return () => {
-      for (const url of pageImageUrls) URL.revokeObjectURL(url);
-    };
-  }, [pageImageUrls]);
+  const activeClassId =
+    mode === "student_first"
+      ? studentWizard.selectedTest?.class_id ?? null
+      : stackWizard.selectedTest?.class_id ?? null;
 
   useEffect(() => {
-    if (!selectedTest) {
-      setRoster([]);
-      setRosterClassId(null);
+    if (!activeClassId) {
+      if (roster.length) setRoster([]);
+      if (rosterClassId !== null) setRosterClassId(null);
       return;
     }
-    if (rosterClassId === selectedTest.class_id) return;
+    if (rosterClassId === activeClassId) return;
 
     let cancelled = false;
     async function load(classId: string) {
@@ -87,13 +122,110 @@ export default function GradeWizard() {
         if (!cancelled) setRosterLoading(false);
       }
     }
-    void load(selectedTest.class_id);
+    void load(activeClassId);
     return () => {
       cancelled = true;
     };
-  }, [selectedTest, rosterClassId]);
+  }, [activeClassId, rosterClassId, roster.length]);
 
-  const activeId = activeStepId(state);
+  const rosterNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of roster) {
+      map.set(
+        entry.user_id,
+        formatStudentDisplayName({ fullName: entry.full_name, email: entry.email }),
+      );
+    }
+    return map;
+  }, [roster]);
+
+  // Student-first flow bits
+  const {
+    state: studentState,
+    selectedTest: studentTest,
+    buckets,
+    activeStudent,
+    preview: studentPreview,
+    results: studentResults,
+    pageToStudentId,
+    gradingPhase,
+    activeJob,
+    studentProgress,
+    errorMessage: studentError,
+    isBusy: studentBusy,
+    parsePreset: studentParsePreset,
+    actions: studentActions,
+  } = studentWizard;
+
+  // Stack flow bits
+  const {
+    state: stackState,
+    selectedTest: stackTest,
+    preview: stackPreview,
+    pageFiles: stackPageFiles,
+    assignments: stackAssignments,
+    results: stackResults,
+    errorMessage: stackError,
+    isBusy: stackBusy,
+    actions: stackActions,
+  } = stackWizard;
+
+  const stackPageImageUrls = useMemo(
+    () => stackPageFiles.map((file) => URL.createObjectURL(file)),
+    [stackPageFiles],
+  );
+  useEffect(() => {
+    return () => {
+      for (const url of stackPageImageUrls) URL.revokeObjectURL(url);
+    };
+  }, [stackPageImageUrls]);
+
+  // For student-first: build image URLs from the buckets in original page order.
+  const studentPageImageUrls = useMemo(() => {
+    const captured = buckets.filter((b) => b.pages.length > 0);
+    const urls: string[] = [];
+    for (const bucket of captured) {
+      for (const file of bucket.pages) {
+        urls.push(URL.createObjectURL(file));
+      }
+    }
+    return urls;
+  }, [buckets]);
+  useEffect(() => {
+    return () => {
+      for (const url of studentPageImageUrls) URL.revokeObjectURL(url);
+    };
+  }, [studentPageImageUrls]);
+
+  const studentProgressWithNames = useMemo(
+    () =>
+      studentProgress.map((student) => ({
+        ...student,
+        studentName: rosterNameById.get(student.studentId) ?? student.studentName,
+      })),
+    [studentProgress, rosterNameById],
+  );
+
+  const sessionStudentIds = useMemo(
+    () => new Set(buckets.map((b) => b.studentId)),
+    [buckets],
+  );
+
+  const activeIsStudent = mode === "student_first";
+  const activeSteps = activeIsStudent ? STUDENT_STEPS : STACK_STEPS;
+  const activeId = activeIsStudent
+    ? studentActiveId(studentState)
+    : stackActiveId(stackState);
+
+  function switchToStack() {
+    studentActions.restart();
+    setMode("stack");
+  }
+
+  function switchToStudentFirst() {
+    stackActions.restart();
+    setMode("student_first");
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -101,20 +233,26 @@ export default function GradeWizard() {
         <div className="mb-6 animate-rise rounded-2xl border border-moss/30 bg-moss-wash px-5 py-4 shadow-paper">
           <p className="font-hand text-2xl text-moss-deep">Your first paper is saved.</p>
           <p className="mt-1 text-sm text-ink-soft">
-            This is where you grade whole stacks — pick a test, photograph the pile, and the red pen takes it from there.
+            Pick a student, snap their pages, and the red pen takes it from there.
           </p>
         </div>
       ) : null}
 
       <SectionHeader
         overline="The red pen"
-        title="Grade a stack"
-        subtitle="Upload photos of handwritten papers; we'll read each page, match it to a student, and grade in one pass."
+        title="Grade papers"
+        subtitle={
+          activeIsStudent
+            ? "Pick a student, add photos of their pages, then grade the whole session in one pass."
+            : "Upload photos of a mixed stack; we'll read each page, match it to a student, and grade in one pass."
+        }
       />
 
       <ol className="mb-8 flex items-center gap-2" aria-label="Wizard steps">
-        {STEPS.map((step, index) => {
-          const isActive = step.matches(state);
+        {activeSteps.map((step, index) => {
+          const isActive = activeIsStudent
+            ? (step as StudentStepDef).matches(studentState)
+            : (step as StackStepDef).matches(stackState);
           const isComplete = step.id < activeId;
           return (
             <li
@@ -140,7 +278,7 @@ export default function GradeWizard() {
               >
                 {step.label}
               </span>
-              {index < STEPS.length - 1 ? (
+              {index < activeSteps.length - 1 ? (
                 <span
                   className={`h-px flex-1 ${isComplete ? "bg-moss/40" : "bg-line"}`}
                   aria-hidden="true"
@@ -151,76 +289,223 @@ export default function GradeWizard() {
         })}
       </ol>
 
-      {state === "pickTest" ? <StepPickTest onSelect={actions.selectTest} /> : null}
-
-      {(state === "uploadStack" || state === "preview-loading") && selectedTest ? (
-        <div className="space-y-3">
-          <Card className="flex flex-wrap items-center justify-between gap-3 bg-cream">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
-                Selected test
-              </p>
-              <p className="mt-0.5 font-display text-base font-semibold text-ink">
-                {selectedTest.title}
-              </p>
+      {/* Student-first flow */}
+      {activeIsStudent ? (
+        <>
+          {studentState === "pickTest" ? (
+            <div className="space-y-4">
+              <StepPickTest onSelect={studentActions.selectTest} />
+              <Card className="flex flex-wrap items-center justify-between gap-3 bg-cream/60">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
+                    Have a pile already sorted together?
+                  </p>
+                  <p className="mt-0.5 text-sm text-ink">
+                    Upload a mixed stack and we&apos;ll match pages to students.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={switchToStack}
+                  className={btnSecondary}
+                >
+                  Upload a mixed stack instead
+                </button>
+              </Card>
             </div>
-            <button
-              type="button"
-              onClick={actions.back}
-              disabled={isBusy}
-              className={btnSecondary}
-            >
-              Change test
-            </button>
-          </Card>
-          <StepUploadStack
-            selectedTest={selectedTest}
-            onSubmit={actions.submitImages}
-            onBack={actions.back}
-            isBusy={isBusy}
-            errorMessage={errorMessage}
-            onClearError={actions.clearError}
-          />
-        </div>
-      ) : null}
+          ) : null}
 
-      {(state === "reviewing" || state === "committing") && preview && selectedTest ? (
-        <div className="space-y-3">
-          {rosterError ? (
-            <Card className="border-pen-soft/60 bg-pen-wash">
-              <p className="text-sm font-bold text-pen-deep">{rosterError}</p>
+          {studentTest && studentState !== "pickTest" && studentState !== "results" ? (
+            <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 bg-cream/60">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
+                  Test
+                </p>
+                <p className="mt-0.5 font-display text-base font-semibold text-ink">
+                  {studentTest.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={studentActions.restart}
+                disabled={studentBusy}
+                className={btnSecondary}
+              >
+                Change
+              </button>
             </Card>
           ) : null}
-          {rosterLoading ? (
-            <Card>
-              <div className="flex items-center justify-center py-6">
-                <div className="h-6 w-6 animate-spin rounded-full border-4 border-pen border-t-transparent" />
-              </div>
-            </Card>
-          ) : (
-            <StepReviewMatches
-              pages={preview.pages}
-              pageImageUrls={pageImageUrls}
-              roster={roster}
-              assignments={assignments}
-              onAssignmentChange={actions.setAssignment}
-              onConfirm={actions.confirmAll}
-              onBack={actions.back}
-              isBusy={isBusy}
-              errorMessage={errorMessage}
-            />
-          )}
-        </div>
-      ) : null}
 
-      {state === "results" && results && selectedTest ? (
-        <StepResults
-          results={results}
-          roster={roster}
-          testTitle={selectedTest.title}
-          onRestart={actions.restart}
-        />
-      ) : null}
+          {studentState === "pickStudent" && studentTest ? (
+            <StepPickStudent
+              roster={roster}
+              rosterLoading={rosterLoading}
+              rosterError={rosterError}
+              sessionStudentIds={sessionStudentIds}
+              onSelect={studentActions.selectStudent}
+              onResume={studentActions.resumeStudent}
+              onBack={studentActions.back}
+            />
+          ) : null}
+
+          {studentState === "capture" && activeStudent ? (
+            <StepCapturePages
+              studentName={activeStudent.studentName}
+              initialPages={activeStudent.pages}
+              pageCount={activeStudent.pages.length}
+              onFilesChange={studentActions.setActivePages}
+              onDone={studentActions.finishActiveStudent}
+              onBack={studentActions.back}
+              errorMessage={studentError}
+            />
+          ) : null}
+
+          {studentState === "sessionSummary" && studentTest ? (
+            <StepSessionSummary
+              buckets={buckets}
+              testTitle={studentTest.title}
+              parsePreset={studentParsePreset}
+              onParsePresetChange={studentActions.setParsePreset}
+              onAddStudent={studentActions.startAddStudent}
+              onResumeStudent={studentActions.resumeStudent}
+              onRemoveStudent={studentActions.removeBucket}
+              onGradeAll={() => void studentActions.submitSession()}
+              onBack={studentActions.back}
+              isBusy={studentBusy}
+              errorMessage={studentError}
+            />
+          ) : null}
+
+          {studentState === "grading" && gradingPhase && studentTest ? (
+            <StepGradingProgress
+              phase={gradingPhase}
+              testTitle={studentTest.title}
+              students={studentProgressWithNames}
+              activeJob={activeJob}
+              errorMessage={studentError}
+            />
+          ) : null}
+
+          {studentState === "reviewing" && studentPreview && studentTest ? (
+            <StepStudentReview
+              pages={studentPreview.pages}
+              pageToStudentId={pageToStudentId}
+              pageImageUrls={studentPageImageUrls}
+              roster={roster}
+              onOcrAnswersChange={studentActions.setOcrAnswers}
+              onConfirm={() => void studentActions.confirmAll()}
+              onBack={studentActions.back}
+              isBusy={studentBusy}
+              errorMessage={studentError}
+            />
+          ) : null}
+
+          {studentState === "results" && studentResults && studentTest ? (
+            <StepResults
+              results={studentResults}
+              roster={roster}
+              testTitle={studentTest.title}
+              onRestart={studentActions.restart}
+            />
+          ) : null}
+        </>
+      ) : (
+        <>
+          {/* Stack (secondary) flow */}
+          {stackState === "pickTest" ? (
+            <div className="space-y-4">
+              <Card className="flex flex-wrap items-center justify-between gap-3 bg-cream/60">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
+                    Mixed stack mode
+                  </p>
+                  <p className="mt-0.5 text-sm text-ink">
+                    Upload every page in one batch and we&apos;ll match names to students.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={switchToStudentFirst}
+                  className={btnPrimary}
+                >
+                  Grade student-by-student instead
+                </button>
+              </Card>
+              <StepPickTest onSelect={stackActions.selectTest} />
+            </div>
+          ) : null}
+
+          {(stackState === "uploadStack" || stackState === "preview-loading") && stackTest ? (
+            <div className="space-y-3">
+              <Card className="flex flex-wrap items-center justify-between gap-3 bg-cream">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
+                    Selected test
+                  </p>
+                  <p className="mt-0.5 font-display text-base font-semibold text-ink">
+                    {stackTest.title}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={stackActions.back}
+                  disabled={stackBusy}
+                  className={btnSecondary}
+                >
+                  Change test
+                </button>
+              </Card>
+              <StepUploadStack
+                selectedTest={stackTest}
+                onSubmit={stackActions.submitImages}
+                onBack={stackActions.back}
+                isBusy={stackBusy}
+                errorMessage={stackError}
+                onClearError={stackActions.clearError}
+              />
+            </div>
+          ) : null}
+
+          {(stackState === "reviewing" || stackState === "committing") && stackPreview && stackTest ? (
+            <div className="space-y-3">
+              {rosterError ? (
+                <Card className="border-pen-soft/60 bg-pen-wash">
+                  <p className="text-sm font-bold text-pen-deep">{rosterError}</p>
+                </Card>
+              ) : null}
+              {rosterLoading ? (
+                <Card>
+                  <div className="flex items-center justify-center py-6">
+                    <div className="h-6 w-6 animate-spin rounded-full border-4 border-pen border-t-transparent" />
+                  </div>
+                </Card>
+              ) : (
+                <StepReviewMatches
+                  pages={stackPreview.pages}
+                  pageImageUrls={stackPageImageUrls}
+                  roster={roster}
+                  assignments={stackAssignments}
+                  onAssignmentChange={stackActions.setAssignment}
+                  onOcrAnswersChange={stackActions.setOcrAnswers}
+                  onConfirm={stackActions.confirmAll}
+                  onBack={stackActions.back}
+                  isBusy={stackBusy}
+                  errorMessage={stackError}
+                />
+              )}
+            </div>
+          ) : null}
+
+          {stackState === "results" && stackResults && stackTest ? (
+            <StepResults
+              results={stackResults}
+              roster={roster}
+              testTitle={stackTest.title}
+              onRestart={stackActions.restart}
+            />
+          ) : null}
+        </>
+      )}
     </main>
   );
 }

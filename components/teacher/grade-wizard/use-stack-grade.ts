@@ -34,8 +34,9 @@ export type UseStackGradeReturn = {
   isBusy: boolean;
   actions: {
     selectTest: (test: TestSummary) => void;
-    submitImages: (files: File[]) => Promise<void>;
+    submitImages: (files: File[], parsePreset?: string) => Promise<void>;
     setAssignment: (pageIndex: number, value: AssignmentValue) => void;
+    setOcrAnswers: (pageIndex: number, answers: OcrAnswer[]) => void;
     confirmAll: () => Promise<void>;
     back: () => void;
     restart: () => void;
@@ -79,7 +80,7 @@ export function useStackGrade(): UseStackGradeReturn {
   }, []);
 
   const submitImages = useCallback(
-    async (files: File[]) => {
+    async (files: File[], parsePreset?: string) => {
       if (!selectedTest) {
         setErrorMessage("Pick a test first.");
         return;
@@ -94,6 +95,7 @@ export function useStackGrade(): UseStackGradeReturn {
       try {
         const formData = new FormData();
         formData.append("testId", selectedTest.id);
+        if (parsePreset) formData.append("parsePreset", parsePreset);
         for (const file of files) {
           formData.append("images", file);
         }
@@ -121,6 +123,18 @@ export function useStackGrade(): UseStackGradeReturn {
 
   const setAssignment = useCallback((pageIndex: number, value: AssignmentValue) => {
     setAssignments((prev) => ({ ...prev, [pageIndex]: value }));
+  }, []);
+
+  const setOcrAnswers = useCallback((pageIndex: number, answers: OcrAnswer[]) => {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        pages: prev.pages.map((page) =>
+          page.pageIndex === pageIndex ? { ...page, ocrAnswers: answers } : page,
+        ),
+      };
+    });
   }, []);
 
   const confirmAll = useCallback(async () => {
@@ -201,12 +215,22 @@ export function useStackGrade(): UseStackGradeReturn {
       selectTest,
       submitImages,
       setAssignment,
+      setOcrAnswers,
       confirmAll,
       back,
       restart,
       clearError,
     }),
-    [selectTest, submitImages, setAssignment, confirmAll, back, restart, clearError],
+    [
+      selectTest,
+      submitImages,
+      setAssignment,
+      setOcrAnswers,
+      confirmAll,
+      back,
+      restart,
+      clearError,
+    ],
   );
 
   return {

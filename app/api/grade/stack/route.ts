@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { tests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { previewStack, commitStack } from "@/lib/stack-grading";
+import { coerceParsePreset } from "@/lib/parse-presets";
 import { OcrAnswer, StackAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -179,6 +180,7 @@ export async function POST(request: NextRequest) {
         images: imagePayloads,
         storagePaths,
         teacherId: teacher.id,
+        parsePreset: coerceParsePreset(form.get("parsePreset")?.toString(), "grade_stack"),
       });
       return NextResponse.json({ phase: "preview", pages: preview.pages });
     } catch (innerError) {

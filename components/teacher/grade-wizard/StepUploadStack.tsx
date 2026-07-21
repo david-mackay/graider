@@ -3,11 +3,16 @@
 import { useState } from "react";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import PageStagingGrid from "@/components/shared/PageStagingGrid";
+import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
+import {
+  defaultPresetForSurface,
+  type DocumentParsePreset,
+} from "@/lib/parse-presets";
 import type { TestSummary } from "@/lib/types";
 
 type StepUploadStackProps = {
   selectedTest: TestSummary;
-  onSubmit: (files: File[]) => void | Promise<void>;
+  onSubmit: (files: File[], parsePreset: DocumentParsePreset) => void | Promise<void>;
   onBack: () => void;
   isBusy: boolean;
   errorMessage: string;
@@ -24,6 +29,9 @@ export default function StepUploadStack({
 }: StepUploadStackProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [localError, setLocalError] = useState("");
+  const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
+    defaultPresetForSurface("grade_stack"),
+  );
 
   const combinedError = errorMessage || localError;
 
@@ -38,7 +46,7 @@ export default function StepUploadStack({
       setLocalError("Add at least one image to continue.");
       return;
     }
-    void onSubmit(files);
+    void onSubmit(files, parsePreset);
   }
 
   return (
@@ -53,6 +61,14 @@ export default function StepUploadStack({
             {files.length} / 10 pages
           </span>
         </div>
+
+        <ParsePresetPicker
+          surface="grade_stack"
+          value={parsePreset}
+          onChange={setParsePreset}
+          disabled={isBusy}
+          className="mb-4"
+        />
 
         <PageStagingGrid
           onFilesChange={handleFilesChange}
@@ -87,7 +103,7 @@ export default function StepUploadStack({
           disabled={isBusy || files.length === 0}
           className={btnPrimary}
         >
-          {isBusy ? "Reading handwriting…" : "Continue to review"}
+          {isBusy ? "Reading papers…" : "Continue to review"}
         </button>
       </div>
     </div>

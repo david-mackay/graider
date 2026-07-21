@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
+import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import {
   FormField,
   btnPrimary,
@@ -16,6 +17,10 @@ import {
   normalizeAnswerKeys,
   type OnboardingAnswerKey,
 } from "@/lib/onboarding/types";
+import {
+  defaultPresetForSurface,
+  type DocumentParsePreset,
+} from "@/lib/parse-presets";
 
 const DEFAULT_PROMPT = "Name two functions of the mitochondria.";
 const DEFAULT_CORRECT_ANSWER =
@@ -63,6 +68,9 @@ export default function OnboardingAnswerKeyPage() {
   const [manualType, setManualType] = useState<"open" | "mcq">("open");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
+    defaultPresetForSurface("answer_key_pdf"),
+  );
 
   useEffect(() => {
     fireEvent(ONBOARDING_EVENTS.ANSWER_KEY);
@@ -140,15 +148,22 @@ export default function OnboardingAnswerKeyPage() {
     if (!file) return;
     const formData = new FormData();
     formData.append("pdf", file, file.name);
+    formData.append("parsePreset", parsePreset);
     await parseUpload(formData, file.name);
   }
 
   async function onPickImages(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const preset =
+      parsePreset === "typed_pdf"
+        ? defaultPresetForSurface("answer_key_photo")
+        : parsePreset;
+    if (preset !== parsePreset) setParsePreset(preset);
     const formData = new FormData();
     Array.from(files).forEach((file, index) => {
       formData.append("image", file, file.name || `key-${index + 1}.jpg`);
     });
+    formData.append("parsePreset", preset);
     await parseUpload(formData, files.length === 1 ? files[0].name : `${files.length} photos`);
   }
 
@@ -253,6 +268,13 @@ export default function OnboardingAnswerKeyPage() {
               multiple
               className="sr-only"
               onChange={(e) => void onPickImages(e.target.files)}
+            />
+            <ParsePresetPicker
+              surface="answer_key_pdf"
+              value={parsePreset}
+              onChange={setParsePreset}
+              disabled={busy}
+              className="mt-4"
             />
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <button

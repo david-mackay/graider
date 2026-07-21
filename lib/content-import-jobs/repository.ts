@@ -8,6 +8,7 @@ export async function createContentImportJob(params: {
   classId: string;
   teacherId: string;
   storagePath: string;
+  parsePreset?: string | null;
 }) {
   const [row] = await db
     .insert(contentImportJobs)
@@ -17,6 +18,7 @@ export async function createContentImportJob(params: {
       classId: params.classId,
       teacherId: params.teacherId,
       storagePath: params.storagePath,
+      parsePreset: params.parsePreset ?? null,
     })
     .returning();
   if (!row) throw new Error("Failed to create import job.");

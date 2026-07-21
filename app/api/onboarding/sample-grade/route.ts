@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Buffer } from "buffer";
 import { gradeQuestion } from "@/lib/openrouter";
 import { extractHandwrittenAnswers } from "@/lib/reducto";
+import { coerceParsePreset } from "@/lib/parse-presets";
 import { gradeMcqExact } from "@/lib/mcq";
 import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import type { OnboardingAnswerKey, OnboardingQuestionGrade } from "@/lib/onboarding/types";
@@ -244,7 +245,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const answers = await extractHandwrittenAnswers(imagePayloads);
+    const answers = await extractHandwrittenAnswers(
+      imagePayloads,
+      coerceParsePreset(form.get("parsePreset")?.toString(), "student_ocr"),
+    );
 
     if (answers.length === 0) {
       const softFail: SampleGradeResponse = {

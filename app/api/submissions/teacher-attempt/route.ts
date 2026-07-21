@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
       .values({
         testId,
         studentId,
+        source: "teacher_ocr",
         status: "submitted",
         submittedAt: new Date(),
       })

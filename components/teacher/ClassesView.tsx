@@ -2,17 +2,14 @@
 
 import { FormEvent, useState } from "react";
 import { Badge, Card, FormField, SectionHeader, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
-import { IconHome } from "@/components/shared/icons";
+import { IconCheck, IconHome, IconPen, IconX } from "@/components/shared/icons";
 import { handleJson } from "@/lib/dashboard-client";
-import type { DashboardClass, DashboardTest, Invitation } from "@/lib/dashboard-types";
-import InvitesPanel from "@/components/teacher/InvitesPanel";
+import type { DashboardClass, DashboardTest } from "@/lib/dashboard-types";
 
 type TeacherClassesViewProps = {
   classes: DashboardClass[];
   tests: DashboardTest[];
   attemptsGradedCountByClass: Map<string, number>;
-  invitesByClass: Record<string, Invitation[]>;
-  loadInvites: (classId: string) => Promise<void>;
   onCreated: () => void | Promise<void>;
   onJoined: () => void | Promise<void>;
   onOpenClass: (classId: string) => void;
@@ -25,8 +22,6 @@ export default function TeacherClassesView({
   classes,
   tests,
   attemptsGradedCountByClass,
-  invitesByClass,
-  loadInvites,
   onCreated,
   onJoined,
   onOpenClass,
@@ -37,7 +32,44 @@ export default function TeacherClassesView({
   const [showCreateClassForm, setShowCreateClassForm] = useState(false);
   const [className, setClassName] = useState("");
   const [joinCode, setJoinCode] = useState("");
-  const [expandedInviteClassId, setExpandedInviteClassId] = useState<string | null>(null);
+  const [renameClassId, setRenameClassId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  function startRename(entry: DashboardClass) {
+    setRenameClassId(entry.id);
+    setRenameValue(entry.name);
+  }
+
+  function cancelRename() {
+    setRenameClassId(null);
+    setRenameValue("");
+  }
+
+  async function submitRename(entry: DashboardClass, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextName = renameValue.trim();
+    if (!nextName || nextName === entry.name) {
+      cancelRename();
+      return;
+    }
+    setBusy(true);
+    try {
+      await handleJson<{ class: DashboardClass }>(
+        await fetch(`/api/classes/${entry.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: nextName }),
+        }),
+      );
+      onStatus(`Class renamed to “${nextName}”.`);
+      cancelRename();
+      await onCreated();
+    } catch (error) {
+      if (error instanceof Error) onStatus(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function createClass(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -139,42 +171,60 @@ export default function TeacherClassesView({
               <Card key={entry.id} className="hover:border-line transition-colors duration-150">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-display text-lg font-semibold text-ink">{entry.name}</h4>
-                      <Badge variant={entry.role_in_class === "teacher" ? "blue" : "gray"}>
-                        {entry.role_in_class ?? "member"}
-                      </Badge>
-                    </div>
+                    {renameClassId === entry.id ? (
+                      <form
+                        onSubmit={(event) => void submitRename(entry, event)}
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <input
+                          className={`${inputClass} max-w-xs`}
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") cancelRename();
+                          }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={isBusy}
+                          className="cursor-pointer inline-flex h-8 w-8 items-center justify-center rounded-full bg-pen text-white shadow-paper hover:bg-pen-deep transition-colors duration-150 disabled:opacity-50"
+                          aria-label="Save class name"
+                        >
+                          <IconCheck className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelRename}
+                          className="cursor-pointer inline-flex h-8 w-8 items-center justify-center rounded-full border border-line bg-paper text-ink-soft hover:bg-cream transition-colors duration-150"
+                          aria-label="Cancel rename"
+                        >
+                          <IconX className="h-4 w-4" />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-display text-lg font-semibold text-ink">{entry.name}</h4>
+                        <Badge variant={entry.role_in_class === "teacher" ? "blue" : "gray"}>
+                          {entry.role_in_class ?? "member"}
+                        </Badge>
+                        {entry.role_in_class === "teacher" ? (
+                          <button
+                            type="button"
+                            onClick={() => startRename(entry)}
+                            className="cursor-pointer inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-faint hover:bg-cream hover:text-pen-deep transition-colors duration-150"
+                            aria-label={`Rename ${entry.name}`}
+                            title="Rename class"
+                          >
+                            <IconPen className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
                     <p className="mt-1 text-xs text-ink-faint">
                       {classTests.length} test{classTests.length !== 1 ? "s" : ""}
                       {gradedCount > 0 ? ` · ${gradedCount} graded` : ""}
                     </p>
-                    {entry.role_in_class === "teacher" ? (
-                      <div className="mt-2.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = expandedInviteClassId === entry.id ? null : entry.id;
-                            setExpandedInviteClassId(next);
-                            if (next && !invitesByClass[next]) void loadInvites(next);
-                          }}
-                          className="cursor-pointer text-xs font-medium text-pen hover:text-pen-deep transition-colors duration-150"
-                        >
-                          {expandedInviteClassId === entry.id ? "Hide invites" : "Manage invites"}
-                        </button>
-
-                        {expandedInviteClassId === entry.id ? (
-                          <InvitesPanel
-                            classId={entry.id}
-                            invitations={invitesByClass[entry.id] ?? []}
-                            onChange={() => loadInvites(entry.id)}
-                            onStatus={onStatus}
-                            isBusy={isBusy}
-                            setBusy={setBusy}
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => onOpenClass(entry.id)} className={btnPrimary}>
@@ -189,7 +239,10 @@ export default function TeacherClassesView({
       )}
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-ink">Join a class</h3>
+        <h3 className="mb-3 text-sm font-semibold text-ink">Join another class</h3>
+        <p className="mb-3 text-xs text-ink-faint">
+          Teachers join a colleague’s class with a teacher invite code. Students join from the Students tab invites.
+        </p>
         <form onSubmit={joinClass} className="flex flex-wrap items-end gap-3">
           <FormField label="Invite code">
             <input

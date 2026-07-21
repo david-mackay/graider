@@ -14,6 +14,7 @@ import {
 } from "@/lib/grade-stack-jobs/repository";
 import { enqueueStackPreviewJob } from "@/lib/grade-stack-jobs/queue";
 import { mapGradeStackJobRow } from "@/lib/grade-stack-jobs/map-job";
+import { coerceParsePreset } from "@/lib/parse-presets";
 import type { StudentPageAssignment } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -146,6 +147,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const parsePreset = coerceParsePreset(
+      form.get("parsePreset")?.toString(),
+      "grade_stack",
+    );
+
     const job = await createGradeStackJob({
       phase: "preview",
       testId,
@@ -159,6 +165,7 @@ export async function POST(request: NextRequest) {
         classId,
         studentPageAssignments,
         gradingMode,
+        parsePreset,
       },
     });
 

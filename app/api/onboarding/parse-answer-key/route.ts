@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Buffer } from "buffer";
 import { extractAnswerKeyQuestions, isReductoConfigured } from "@/lib/reducto";
+import { coerceParsePreset } from "@/lib/parse-presets";
 import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import { ONBOARDING_MAX_ANSWER_KEYS } from "@/lib/onboarding/types";
 import type { ParsedImportQuestion } from "@/lib/types";
@@ -138,9 +139,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const parsed = await extractAnswerKeyQuestions(uploads);
+    const sourceIsVision = uploads.every((u) => u.mimeType.startsWith("image/"));
+    const preset = coerceParsePreset(
+      form.get("parsePreset")?.toString(),
+      sourceIsVision ? "answer_key_photo" : "answer_key_pdf",
+    );
+    const parsed = await extractAnswerKeyQuestions(uploads, preset);
     const questions = mapQuestions(parsed);
-    const source = uploads.every((u) => u.mimeType.startsWith("image/")) ? "vision" : "reducto";
+    const source = sourceIsVision ? "vision" : "reducto";
     if (questions.length === 0) {
       return NextResponse.json(
         {

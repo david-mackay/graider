@@ -2,7 +2,13 @@
 
 import { useRef, useState } from "react";
 import { Card, btnSecondary } from "@/components/shared/ui";
+import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import { handleJson } from "@/lib/dashboard-client";
+import {
+  defaultPresetForSurface,
+  type DocumentParsePreset,
+  type ParseSurface,
+} from "@/lib/parse-presets";
 
 export type ContentImportKind = "question_bank" | "test";
 
@@ -24,6 +30,11 @@ type ImportJobResponse = {
 const ENDPOINTS: Record<ContentImportKind, string> = {
   question_bank: "question-bank/import",
   test: "tests/import",
+};
+
+const SURFACES: Record<ContentImportKind, ParseSurface> = {
+  question_bank: "question_bank_import",
+  test: "test_import",
 };
 
 const LABELS: Record<ContentImportKind, { title: string; hint: string; success: (n?: number) => string }> = {
@@ -53,8 +64,12 @@ export default function PdfImportPanel({
   disabled = false,
 }: PdfImportPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const surface = SURFACES[kind];
   const [busy, setBusy] = useState(false);
   const [pickedName, setPickedName] = useState<string | null>(null);
+  const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
+    defaultPresetForSurface(surface),
+  );
   const labels = LABELS[kind];
 
   async function pollJob(jobId: string): Promise<ImportJobResponse> {
@@ -78,6 +93,7 @@ export default function PdfImportPanel({
     try {
       const formData = new FormData();
       formData.append("pdf", file);
+      formData.append("parsePreset", parsePreset);
       const created = await handleJson<{ jobId: string; status: string }>(
         await fetch(`/api/classes/${classId}/${ENDPOINTS[kind]}`, {
           method: "POST",
@@ -103,6 +119,13 @@ export default function PdfImportPanel({
     <Card className="border-dashed border-line bg-cream/40">
       <p className="text-sm font-semibold text-ink">{labels.title}</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-faint">{labels.hint}</p>
+      <ParsePresetPicker
+        surface={surface}
+        value={parsePreset}
+        onChange={setParsePreset}
+        disabled={disabled || busy}
+        className="mt-3"
+      />
       <input
         ref={fileRef}
         type="file"

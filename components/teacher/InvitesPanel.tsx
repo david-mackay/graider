@@ -33,6 +33,11 @@ function formatExpiry(invite: Invitation): string {
   return `Expires in ${diffDays} days`;
 }
 
+function joinLinkForCode(code: string): string {
+  if (typeof window === "undefined") return `/s?join=${encodeURIComponent(code)}`;
+  return `${window.location.origin}/s?join=${encodeURIComponent(code)}`;
+}
+
 export default function InvitesPanel({
   classId,
   invitations,
@@ -42,7 +47,9 @@ export default function InvitesPanel({
   setBusy,
 }: InvitesPanelProps) {
   const [inviteExpiry, setInviteExpiry] = useState("0");
+  const [inviteSingleUse, setInviteSingleUse] = useState(true);
   const [copiedId, setCopiedId] = useState("");
+  const [copiedLinkId, setCopiedLinkId] = useState("");
 
   async function generateInvite(role: "student" | "teacher") {
     setBusy(true);
@@ -52,7 +59,12 @@ export default function InvitesPanel({
         await fetch(`/api/classes/${classId}/invite`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ invited_email: null, role, expires_in_days: expiresInDays }),
+          body: JSON.stringify({
+            invited_email: null,
+            role,
+            expires_in_days: expiresInDays,
+            single_use: inviteSingleUse,
+          }),
         }),
       );
       onStatus(`New ${role} invite code generated.`);
@@ -93,6 +105,17 @@ export default function InvitesPanel({
     }
   }
 
+  async function copyJoinLink(id: string, code: string) {
+    try {
+      await navigator.clipboard.writeText(joinLinkForCode(code));
+      setCopiedLinkId(id);
+      onStatus("Join link copied to clipboard.");
+      window.setTimeout(() => setCopiedLinkId((c) => (c === id ? "" : c)), 2000);
+    } catch (error) {
+      if (error instanceof Error) onStatus(error.message, "error");
+    }
+  }
+
   return (
     <div className="mt-3 space-y-4 border-t border-line-soft pt-3">
       <div className="flex flex-wrap items-end gap-2">
@@ -109,6 +132,15 @@ export default function InvitesPanel({
             <option value="30">30 days</option>
           </select>
         </div>
+        <label className="flex cursor-pointer select-none items-center gap-1.5 rounded-lg border border-line bg-paper px-2 py-1.5 text-xs text-ink-soft hover:border-ink-faint transition-colors duration-150">
+          <input
+            type="checkbox"
+            checked={inviteSingleUse}
+            onChange={(e) => setInviteSingleUse(e.target.checked)}
+            className="h-3.5 w-3.5 cursor-pointer accent-pen"
+          />
+          <span>Single-use</span>
+        </label>
         <button
           type="button"
           disabled={isBusy}
@@ -149,6 +181,7 @@ export default function InvitesPanel({
                 <Badge variant={derivedStatus === "active" ? "green" : derivedStatus === "expired" ? "yellow" : "gray"}>
                   {derivedStatus}
                 </Badge>
+                <Badge variant="gray">{inv.single_use === false ? "Reusable" : "Single-use"}</Badge>
                 <span className="text-ink-faint">
                   {derivedStatus === "accepted" && inv.accepted_by_name
                     ? inv.accepted_by_name
@@ -156,17 +189,40 @@ export default function InvitesPanel({
                 </span>
                 <div className="ml-auto flex items-center gap-1.5">
                   {derivedStatus === "active" ? (
-                    <button
-                      type="button"
-                      onClick={() => void copyCode(inv.id, inv.code)}
-                      className="cursor-pointer flex items-center gap-1 rounded-md px-1.5 py-0.5 text-ink-soft hover:bg-cream hover:text-pen-deep transition-colors duration-150"
-                    >
-                      {copiedId === inv.id ? (
-                        <IconCheck className="h-3 w-3 text-moss" />
-                      ) : (
-                        <IconCopy className="h-3 w-3" />
-                      )}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void copyJoinLink(inv.id, inv.code)}
+                        className="cursor-pointer inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-ink-soft hover:bg-cream hover:text-pen-deep transition-colors duration-150"
+                        title="Copy join link"
+                        aria-label="Copy join link"
+                      >
+                        {copiedLinkId === inv.id ? (
+                          <>
+                            <IconCheck className="h-3 w-3 text-moss" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wide">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <IconCopy className="h-3 w-3" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wide">Link</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copyCode(inv.id, inv.code)}
+                        className="cursor-pointer inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-ink-soft hover:bg-cream hover:text-pen-deep transition-colors duration-150"
+                        title="Copy code"
+                        aria-label="Copy invite code"
+                      >
+                        {copiedId === inv.id ? (
+                          <IconCheck className="h-3 w-3 text-moss" />
+                        ) : (
+                          <IconCopy className="h-3 w-3" />
+                        )}
+                      </button>
+                    </>
                   ) : null}
                   {derivedStatus !== "accepted" ? (
                     <button
@@ -174,6 +230,8 @@ export default function InvitesPanel({
                       disabled={isBusy}
                       onClick={() => void deleteInvite(inv.id)}
                       className="cursor-pointer rounded-md px-1.5 py-0.5 text-ink-faint hover:bg-pen-wash hover:text-pen transition-colors duration-150"
+                      title="Delete invite"
+                      aria-label="Delete invite"
                     >
                       <IconX className="h-3 w-3" />
                     </button>

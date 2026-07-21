@@ -40,13 +40,22 @@ export type QuestionBankQuestion = {
   updated_at?: string | null;
 };
 
+export type TestStatus = "draft" | "scheduled" | "open" | "closed";
+
 export type TestSummary = {
   id: string;
   title: string;
   class_id: string;
   teacher_id: string;
+  status: TestStatus;
+  opens_at: string | null;
+  closes_at: string | null;
+  duration_minutes: number | null;
+  allow_late_submit: boolean;
   grades_released: boolean;
   show_ai_feedback: boolean;
+  /** Student-facing: whether the test can be started right now */
+  available_now?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -56,6 +65,8 @@ export type TestQuestion = {
   prompt: string;
   marks: number;
   sort_order: number;
+  /** Present for teachers only — never sent to students. */
+  correct_answer?: string;
 };
 
 export type TestDetail = {
@@ -63,6 +74,14 @@ export type TestDetail = {
   title: string;
   class_id: string;
   teacher_id: string;
+  status: TestStatus;
+  opens_at: string | null;
+  closes_at: string | null;
+  duration_minutes: number | null;
+  allow_late_submit: boolean;
+  grades_released?: boolean;
+  show_ai_feedback?: boolean;
+  available_now?: boolean;
   questions: TestQuestion[];
   created_at?: string | null;
   updated_at?: string | null;
@@ -72,10 +91,13 @@ export type TestAttempt = {
   id: string;
   test_id: string;
   student_id: string;
+  source?: "student" | "teacher_ocr";
   status: "submitted" | "graded" | "draft";
   total_marks: number | null;
   max_marks: number | null;
+  started_at?: string | null;
   submitted_at: string | null;
+  timed_out_at?: string | null;
   graded_at: string | null;
   ocr_uploads: string[] | null;
 };
@@ -222,6 +244,8 @@ export type GradeStackPreviewJobInput = {
   classId?: string | null;
   studentPageAssignments?: StudentPageAssignment[];
   gradingMode?: "student_first" | "stack";
+  /** DocumentParsePreset for Reducto OCR. */
+  parsePreset?: string;
 };
 
 export type GradeStackCommitJobInput = {

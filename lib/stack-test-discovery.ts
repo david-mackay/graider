@@ -1,17 +1,12 @@
 import { db } from "@/lib/db";
 import { questionBank, testQuestions, tests } from "@/drizzle/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { parseTestFromStackImages } from "@/lib/reducto";
+import { parseTestFromStackImages, type ImagePayload } from "@/lib/reducto";
+import { coerceParsePreset, type DocumentParsePreset } from "@/lib/parse-presets";
 import { normalizeQuestion } from "@/lib/stack-grading";
 import type { OcrPage, ParsedImportQuestion, StackTestDiscovery } from "@/lib/types";
 
 export const DRAFT_AUTO_DISCOVERY_TITLE = "Detecting test from papers…";
-
-type ImagePayload = {
-  filename: string;
-  mimeType: string;
-  base64: string;
-};
 
 function collectOcrQuestionPrompts(ocrPages: OcrPage[]): string[] {
   const seen = new Set<string>();
@@ -200,6 +195,7 @@ export async function discoverOrCreateTestForStack(params: {
   draftTestId: string;
   ocrPages: OcrPage[];
   images: ImagePayload[];
+  parsePreset?: DocumentParsePreset | string;
 }): Promise<{ discovery: StackTestDiscovery; draftTestIdToDelete: string | null }> {
   const match = await findBestMatchingTest({
     classId: params.classId,
@@ -219,7 +215,10 @@ export async function discoverOrCreateTestForStack(params: {
     };
   }
 
-  const parsed = await parseTestFromStackImages(params.images);
+  const parsed = await parseTestFromStackImages(
+    params.images,
+    coerceParsePreset(params.parsePreset, "grade_stack"),
+  );
   await replaceTestQuestions({
     testId: params.draftTestId,
     classId: params.classId,

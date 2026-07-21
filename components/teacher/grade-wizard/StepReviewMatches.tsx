@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
+import { Badge, Card, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
 import { IconX } from "@/components/shared/icons";
 import RosterPicker from "@/components/teacher/grade-wizard/RosterPicker";
 import {
@@ -9,7 +9,7 @@ import {
   type AssignmentMap,
   type AssignmentValue,
 } from "@/components/teacher/grade-wizard/use-stack-grade";
-import type { RosterEntry, StackPagePreview } from "@/lib/types";
+import type { OcrAnswer, RosterEntry, StackPagePreview } from "@/lib/types";
 
 type StepReviewMatchesProps = {
   pages: StackPagePreview[];
@@ -18,11 +18,16 @@ type StepReviewMatchesProps = {
   roster: RosterEntry[];
   assignments: AssignmentMap;
   onAssignmentChange: (pageIndex: number, value: AssignmentValue) => void;
+  onOcrAnswersChange: (pageIndex: number, answers: OcrAnswer[]) => void;
   onConfirm: () => void;
   onBack: () => void;
   isBusy: boolean;
   errorMessage: string;
 };
+
+function emptyOcrAnswer(): OcrAnswer {
+  return { question: "", answer: "", question_index: null };
+}
 
 const STATUS_ORDER: Record<StackPagePreview["status"], number> = {
   unmatched: 0,
@@ -47,6 +52,7 @@ export default function StepReviewMatches({
   roster,
   assignments,
   onAssignmentChange,
+  onOcrAnswersChange,
   onConfirm,
   onBack,
   isBusy,
@@ -92,6 +98,22 @@ export default function StepReviewMatches({
       else next.add(pageIndex);
       return next;
     });
+  }
+
+  function updateAnswer(page: StackPagePreview, index: number, patch: Partial<OcrAnswer>) {
+    const next = page.ocrAnswers.map((a, i) => (i === index ? { ...a, ...patch } : a));
+    onOcrAnswersChange(page.pageIndex, next);
+  }
+
+  function addAnswer(page: StackPagePreview) {
+    onOcrAnswersChange(page.pageIndex, [...page.ocrAnswers, emptyOcrAnswer()]);
+  }
+
+  function removeAnswer(page: StackPagePreview, index: number) {
+    onOcrAnswersChange(
+      page.pageIndex,
+      page.ocrAnswers.filter((_, i) => i !== index),
+    );
   }
 
   const confirmDisabled = isBusy || counts.toGrade === 0 || counts.needsAssignment > 0;
@@ -214,39 +236,112 @@ export default function StepReviewMatches({
                       />
                     </div>
 
-                    {page.ocrAnswers.length > 0 ? (
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={() => toggleAnswers(page.pageIndex)}
-                          className="cursor-pointer text-xs font-bold text-pen hover:text-pen-deep transition-colors duration-150"
-                          aria-expanded={isAnswersOpen}
-                        >
-                          {isAnswersOpen ? "Hide" : "Show"} extracted answers ({page.ocrAnswers.length})
-                        </button>
-                        {isAnswersOpen ? (
-                          <ul className="mt-2 space-y-1.5 rounded-xl border border-line bg-cream p-3 text-xs">
-                            {page.ocrAnswers.map((answer, idx) => (
-                              <li key={idx} className="text-ink-soft">
-                                <span className="font-bold text-pen-deep">
-                                  Q{answer.question_index != null ? answer.question_index + 1 : idx + 1}:
-                                </span>{" "}
-                                <span className="font-bold text-ink">
-                                  {answer.question}
-                                </span>
-                                <div className="mt-0.5 text-ink-soft">
-                                  {answer.answer || <span className="italic text-ink-faint">no answer</span>}
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleAnswers(page.pageIndex)}
+                        className="cursor-pointer text-xs font-bold text-pen hover:text-pen-deep transition-colors duration-150"
+                        aria-expanded={isAnswersOpen}
+                      >
+                        {isAnswersOpen ? "Hide" : "Edit"} extracted answers ({page.ocrAnswers.length})
+                      </button>
+                      {isAnswersOpen ? (
+                        <div className="mt-2 space-y-3 rounded-xl border border-line bg-cream p-3">
+                          {page.ocrAnswers.length === 0 ? (
+                            <p className="text-xs italic text-ink-faint">
+                              No answers were extracted from this page. Add one manually if needed.
+                            </p>
+                          ) : (
+                            page.ocrAnswers.map((answer, idx) => (
+                              <div
+                                key={idx}
+                                className="rounded-lg border border-line bg-paper p-3"
+                              >
+                                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                  <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
+                                    Answer {idx + 1}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeAnswer(page, idx)}
+                                    disabled={isBusy}
+                                    className="cursor-pointer text-xs font-bold text-ink-soft transition-colors duration-150 hover:text-pen disabled:cursor-not-allowed disabled:opacity-40"
+                                    aria-label={`Remove answer ${idx + 1}`}
+                                  >
+                                    Remove
+                                  </button>
                                 </div>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-xs italic text-ink-faint">
-                        No answers were extracted from this page.
-                      </p>
-                    )}
+
+                                <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                                  <label className="block">
+                                    <span className="text-xs font-bold text-ink">Question</span>
+                                    <input
+                                      type="text"
+                                      value={answer.question}
+                                      onChange={(e) =>
+                                        updateAnswer(page, idx, { question: e.target.value })
+                                      }
+                                      placeholder="Question prompt (optional)"
+                                      disabled={isBusy}
+                                      className={`${inputClass} mt-1`}
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-xs font-bold text-ink">Question #</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={
+                                        answer.question_index != null
+                                          ? answer.question_index + 1
+                                          : ""
+                                      }
+                                      onChange={(e) => {
+                                        const raw = e.target.value.trim();
+                                        const parsed = raw === "" ? null : Number(raw);
+                                        const next =
+                                          parsed !== null && Number.isFinite(parsed) && parsed >= 1
+                                            ? parsed - 1
+                                            : null;
+                                        updateAnswer(page, idx, { question_index: next });
+                                      }}
+                                      placeholder="e.g. 1"
+                                      disabled={isBusy}
+                                      className={`${inputClass} mt-1`}
+                                    />
+                                  </label>
+                                </div>
+
+                                <label className="mt-2 block">
+                                  <span className="text-xs font-bold text-ink">
+                                    Student answer
+                                  </span>
+                                  <textarea
+                                    value={answer.answer}
+                                    onChange={(e) =>
+                                      updateAnswer(page, idx, { answer: e.target.value })
+                                    }
+                                    placeholder="Fix any OCR misreads…"
+                                    disabled={isBusy}
+                                    rows={2}
+                                    className={`${inputClass} mt-1 min-h-[3rem] resize-y`}
+                                  />
+                                </label>
+                              </div>
+                            ))
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => addAnswer(page)}
+                            disabled={isBusy}
+                            className="cursor-pointer rounded-full border-2 border-dashed border-pen/40 bg-pen-wash/20 px-4 py-2 text-xs font-bold text-pen-deep transition-colors duration-150 hover:bg-pen-wash/40 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            + Add answer
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>

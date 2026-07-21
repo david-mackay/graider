@@ -55,7 +55,9 @@ export type Invitation = {
   role: "student" | "teacher";
   status: string;
   invited_email: string | null;
+  invited_name: string | null;
   expires_at: string | null;
   created_at: string | null;
   accepted_by_name: string | null;
+  single_use?: boolean;
 };

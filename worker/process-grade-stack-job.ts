@@ -17,6 +17,7 @@ import {
   previewStack,
 } from "@/lib/stack-grading";
 import { extractHandwrittenStack, extractStudentFirstPreview } from "@/lib/reducto";
+import { coerceParsePreset } from "@/lib/parse-presets";
 import { discoverOrCreateTestForStack, deleteDraftTestIfUnused } from "@/lib/stack-test-discovery";
 import { notifyGradeStackJobUpdate } from "@/lib/grade-stack-jobs/notify";
 import { GradeStackQueueJobData } from "@/lib/grade-stack-jobs/queue";
@@ -67,10 +68,11 @@ export async function processStackPreviewJob(data: GradeStackQueueJobData) {
     const images = await loadPreviewImagesFromStorage(input);
     const storagePaths = input.storagePaths.map((path) => path as string | null);
     const studentFirst = isStudentFirst(input);
+    const parsePreset = coerceParsePreset(input.parsePreset, "grade_stack");
 
     const ocrPages = studentFirst
-      ? await extractStudentFirstPreview(images, input.studentPageAssignments!)
-      : await extractHandwrittenStack(images);
+      ? await extractStudentFirstPreview(images, input.studentPageAssignments!, parsePreset)
+      : await extractHandwrittenStack(images, parsePreset);
 
     if (input.autoDiscover) {
       const classId = input.classId ?? row.classId;
@@ -90,6 +92,7 @@ export async function processStackPreviewJob(data: GradeStackQueueJobData) {
         draftTestId: row.testId,
         ocrPages,
         images: discoveryImages,
+        parsePreset,
       });
 
       const pages = studentFirst

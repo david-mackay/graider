@@ -285,8 +285,6 @@ export default function TeacherDashboard() {
                   classes={classes}
                   tests={tests}
                   attemptsGradedCountByClass={attemptsGradedCountByClass}
-                  invitesByClass={invitesByClass}
-                  loadInvites={loadInvites}
                   onCreated={loadDashboard}
                   onJoined={loadDashboard}
                   onOpenClass={(id) => {
@@ -338,7 +336,14 @@ export default function TeacherDashboard() {
                 className={activeClass?.name ?? null}
                 members={classMembers}
                 attemptsInScope={attemptsInScope}
-                onGoToClasses={() => navigate("classes")}
+                invitations={scopedClassId ? invitesByClass[scopedClassId] ?? [] : []}
+                onLoadInvites={async () => {
+                  if (scopedClassId) await loadInvites(scopedClassId);
+                }}
+                onChanged={loadDashboard}
+                onStatus={setStatus}
+                isBusy={isBusy}
+                setBusy={setIsBusy}
               />
             ) : null}
           </div>

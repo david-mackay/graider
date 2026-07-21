@@ -8,6 +8,7 @@ import {
   setContentImportBullmqJobId,
 } from "@/lib/content-import-jobs/repository";
 import { enqueueQuestionBankImportJob } from "@/lib/content-import-jobs/queue";
+import { coerceParsePreset } from "@/lib/parse-presets";
 
 export const runtime = "nodejs";
 
@@ -43,11 +44,17 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const storagePath = `imports/${classId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9_.-]/g, "-")}`;
     await uploadFile(storagePath, buffer, "application/pdf");
 
+    const parsePreset = coerceParsePreset(
+      form.get("parsePreset")?.toString(),
+      "question_bank_import",
+    );
+
     const job = await createContentImportJob({
       kind: "question_bank",
       classId,
       teacherId: teacher.id,
       storagePath,
+      parsePreset,
     });
 
     const bullmqJobId = await enqueueQuestionBankImportJob(job.id);

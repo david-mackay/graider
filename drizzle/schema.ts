@@ -52,6 +52,8 @@ export const classInvitations = pgTable(
       .notNull()
       .references(() => classes.id, { onDelete: "cascade" }),
     invitedEmail: text("invited_email"),
+    /** Display name the invite is reserved for (required for student invites). */
+    invitedName: text("invited_name"),
     invitationCode: text("invitation_code").notNull().unique(),
     invitedBy: text("invited_by")
       .notNull()
@@ -59,6 +61,8 @@ export const classInvitations = pgTable(
     role: text("role").notNull().default("student"),
     studentId: text("student_id").references(() => appUsers.id, { onDelete: "set null" }),
     status: text("status").notNull().default("pending"),
+    /** When true, invite is marked accepted on first successful join and cannot be reused. */
+    singleUse: boolean("single_use").notNull().default(true),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -101,6 +105,13 @@ export const tests = pgTable("tests", {
     .notNull()
     .references(() => appUsers.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  /** draft | scheduled | open | closed */
+  status: text("status").notNull().default("draft"),
+  opensAt: timestamp("opens_at", { withTimezone: true }),
+  closesAt: timestamp("closes_at", { withTimezone: true }),
+  /** null = window-only; set = timed duration from attempt start */
+  durationMinutes: integer("duration_minutes"),
+  allowLateSubmit: boolean("allow_late_submit").notNull().default(false),
   gradesReleased: boolean("grades_released").notNull().default(true),
   showAiFeedback: boolean("show_ai_feedback").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -124,26 +135,39 @@ export const testQuestions = pgTable(
   }),
 );
 
-export const testAttempts = pgTable("test_attempts", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  testId: uuid("test_id")
-    .notNull()
-    .references(() => tests.id, { onDelete: "cascade" }),
-  studentId: text("student_id")
-    .notNull()
-    .references(() => appUsers.id, { onDelete: "cascade" }),
-  status: text("status").notNull().default("submitted"),
-  totalMarks: integer("total_marks"),
-  maxMarks: integer("max_marks"),
-  submittedAt: timestamp("submitted_at", { withTimezone: true }),
-  gradedAt: timestamp("graded_at", { withTimezone: true }),
-  ocrUploads: text("ocr_uploads")
-    .array()
-    .notNull()
-    .default(sql`'{}'::text[]`),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+export const testAttempts = pgTable(
+  "test_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    testId: uuid("test_id")
+      .notNull()
+      .references(() => tests.id, { onDelete: "cascade" }),
+    studentId: text("student_id")
+      .notNull()
+      .references(() => appUsers.id, { onDelete: "cascade" }),
+    /** student | teacher_ocr */
+    source: text("source").notNull().default("student"),
+    status: text("status").notNull().default("submitted"),
+    totalMarks: integer("total_marks"),
+    maxMarks: integer("max_marks"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    timedOutAt: timestamp("timed_out_at", { withTimezone: true }),
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
+    ocrUploads: text("ocr_uploads")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    testStudentUnique: unique("test_attempts_test_id_student_id_uniq").on(
+      table.testId,
+      table.studentId,
+    ),
+  }),
+);
 
 export const attemptAnswers = pgTable(
   "attempt_answers",
@@ -224,6 +248,8 @@ export const contentImportJobs = pgTable(
       .notNull()
       .references(() => appUsers.id, { onDelete: "cascade" }),
     storagePath: text("storage_path").notNull(),
+    /** DocumentParsePreset id for Reducto parse settings. */
+    parsePreset: text("parse_preset"),
     bullmqJobId: text("bullmq_job_id"),
     resultPayload: jsonb("result_payload"),
     error: text("error"),
