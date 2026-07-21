@@ -19,10 +19,23 @@ const ANSWER_KEY_SYSTEM_PROMPT =
   "Extract every question in document order for a review screen the teacher will edit. " +
   "Prefer confident values; omit rather than invent. " +
   "For multiple-choice: set question_type to mcq, put the correct letter only in correct_answer (A–E), " +
-  "and include choices when option text is visible. Circled, bubbled, highlighted, or marked options count as the answer. " +
-  "Letter-only keys like '1. B  2. A' become mcq rows with prompt 'Question N' and choices null. " +
+  "and ALWAYS include choices when option text is visible on the page " +
+  "(each choice needs key A–E and the full option wording without the leading letter). " +
+  "Do not leave choices empty when A/B/C/D/(E) stems appear under a question. " +
+  "Circled, bubbled, highlighted, or marked options count as the answer. " +
+  "Letter-only keys like '1. B  2. A' (no option wording) become mcq rows with prompt 'Question N' and choices null. " +
   "Open-ended items use question_type open with the full model answer in correct_answer. " +
   "Extract every item — do not truncate the list.";
+
+const TEST_PAPER_SYSTEM_PROMPT =
+  "This is a student-facing test or exam paper (questions, often with multiple-choice options). " +
+  "Extract the test title from the header when present, and every question in document order. " +
+  "Prefer confident values; omit rather than invent. " +
+  "When a question shows options A–E (or A–D), set question_type to mcq and ALWAYS populate choices " +
+  "with every visible option: key is the letter, text is the option wording without the leading letter. " +
+  "Put the correct letter in correct_answer only when an answer key is printed on the same paper; " +
+  "otherwise use an empty correct_answer for MCQ stems (teachers may merge an answer key later). " +
+  "Open-ended items use question_type open. Extract every question — do not truncate.";
 
 const QUESTION_ITEM_SCHEMA = {
   type: "object",
@@ -52,7 +65,10 @@ const QUESTION_ITEM_SCHEMA = {
     },
     choices: {
       type: "array",
-      description: "MCQ option text when present on the page; omit or empty for letter-only keys",
+      description:
+        "Required for MCQ when option wording is on the page. " +
+        "One entry per letter A–E with the option text (omit leading 'A.' / 'A)'). " +
+        "Empty/omit only for letter-only answer keys with no option text.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -250,9 +266,7 @@ export async function extractTestFromDocument(
   const data = await extractWithSchema({
     fileIds,
     schema: TEST_SCHEMA,
-    systemPrompt:
-      ANSWER_KEY_SYSTEM_PROMPT +
-      " Also extract the test title from the header when present.",
+    systemPrompt: TEST_PAPER_SYSTEM_PROMPT,
     preset: coerceParsePreset(preset, "test_import"),
   });
   const title =
@@ -572,7 +586,8 @@ export async function parseTestFromStackImages(
       "For each question provide a model correct_answer a teacher would use to grade " +
       "(infer from the question when no answer key is visible). " +
       "Use printed mark values when present; otherwise default marks sensibly. " +
-      "Set question_type to mcq when options A–E appear; otherwise open. Include choices when visible. " +
+      "Set question_type to mcq when options A–E appear; otherwise open. " +
+      "ALWAYS include choices with every visible option's full text when options appear. " +
       "Extract every question — do not truncate.",
     preset: resolved,
   });

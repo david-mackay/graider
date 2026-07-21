@@ -66,19 +66,29 @@ export async function GET(_request: Request, { params }: RouteContext) {
         prompt: questionBank.prompt,
         marks: questionBank.marks,
         correctAnswer: questionBank.correctAnswer,
+        questionType: questionBank.questionType,
+        choices: questionBank.choices,
       })
       .from(testQuestions)
       .innerJoin(questionBank, eq(testQuestions.questionId, questionBank.id))
       .where(eq(testQuestions.testId, testId))
       .orderBy(asc(testQuestions.sortOrder));
 
-    const questions = relations.map((row) => ({
-      question_id: row.questionId,
-      prompt: row.prompt,
-      marks: row.marks,
-      sort_order: row.sortOrder,
-      ...(isTeacher ? { correct_answer: row.correctAnswer } : {}),
-    }));
+    const questions = relations.map((row) => {
+      const questionType = row.questionType === "mcq" ? "mcq" : "open";
+      return {
+        question_id: row.questionId,
+        prompt: row.prompt,
+        marks: row.marks,
+        sort_order: row.sortOrder,
+        question_type: questionType as "open" | "mcq",
+        choices:
+          questionType === "mcq"
+            ? ((row.choices as Array<{ key: string; text: string }> | null) ?? null)
+            : null,
+        ...(isTeacher ? { correct_answer: row.correctAnswer } : {}),
+      };
+    });
 
     const schedule = mapTestScheduleToApi(test);
     const result: TestDetail = {

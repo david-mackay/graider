@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
+import { resolveMcqChoices } from "@/lib/mcq-choices";
 import type { TestDetail } from "@/lib/types";
 
 type TestTakingFormProps = {
@@ -148,28 +149,71 @@ export default function TestTakingForm({
           }}
           className="space-y-4"
         >
-          {test.questions.map((q, i) => (
-            <Card key={q.question_id} className="border-line-soft">
-              <label className="block">
+          {test.questions.map((q, i) => {
+            const mcqChoices = resolveMcqChoices(q);
+            return (
+              <Card key={q.question_id} className="border-line-soft">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-ink-faint">
                     Question {i + 1}
+                    {mcqChoices ? " · Multiple choice" : ""}
                   </span>
                   <span className="rounded-full bg-cream px-2.5 py-0.5 text-xs font-semibold text-pen">
                     {q.marks} mark{q.marks !== 1 ? "s" : ""}
                   </span>
                 </div>
                 <p className="text-base font-semibold text-ink leading-relaxed">{q.prompt}</p>
-                <textarea
-                  required
-                  className={`${inputClass} mt-4 min-h-[120px]`}
-                  value={answers[q.question_id] ?? ""}
-                  onChange={(e) => onChangeAnswer(q.question_id, e.target.value)}
-                  placeholder="Type your answer here…"
-                />
-              </label>
-            </Card>
-          ))}
+                {mcqChoices ? (
+                  <fieldset className="mt-4 space-y-2" aria-label={`Choices for question ${i + 1}`}>
+                    <legend className="sr-only">Select an answer</legend>
+                    {mcqChoices.map((choice) => {
+                      const selected = (answers[q.question_id] ?? "").toUpperCase() === choice.key;
+                      return (
+                        <label
+                          key={choice.key}
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors duration-150 ${
+                            selected
+                              ? "border-pen bg-pen-wash"
+                              : "border-line bg-paper hover:border-ink-faint"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            className="mt-1 h-4 w-4 border-ink-faint text-pen focus:ring-pen"
+                            name={`q-${q.question_id}`}
+                            value={choice.key}
+                            checked={selected}
+                            required
+                            onChange={() => onChangeAnswer(q.question_id, choice.key)}
+                          />
+                          <span className="min-w-0">
+                            <span className="font-bold text-pen">{choice.key}.</span>{" "}
+                            <span className="text-sm text-ink leading-relaxed">
+                              {choice.text === choice.key ? "" : choice.text}
+                            </span>
+                            {choice.text === choice.key ? (
+                              <span className="text-sm text-ink-soft">Option {choice.key}</span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                ) : (
+                  <label className="block">
+                    <span className="sr-only">Your answer</span>
+                    <textarea
+                      required
+                      className={`${inputClass} mt-4 min-h-[120px]`}
+                      value={answers[q.question_id] ?? ""}
+                      onChange={(e) => onChangeAnswer(q.question_id, e.target.value)}
+                      placeholder="Type your answer here…"
+                    />
+                  </label>
+                )}
+              </Card>
+            );
+          })}
           <div className="sticky bottom-4 mt-6">
             <div className="flex gap-3 rounded-2xl border border-line bg-paper/90 backdrop-blur-sm p-3 shadow-card">
               {remainingMs !== null ? (

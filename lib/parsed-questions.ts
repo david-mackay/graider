@@ -38,18 +38,21 @@ export function normalizeParsedQuestions(raw: unknown): ParsedImportQuestion[] {
               : "";
         const text = typeof c.text === "string" ? c.text.trim() : "";
         if (!key || !/^[A-E]$/.test(key)) continue;
-        parsed.push({ key, text });
+        parsed.push({ key, text: text || key });
       }
       choices = parsed.length > 0 ? parsed : null;
     }
+    // Structured choices imply MCQ even if the model forgot question_type.
+    const resolvedType: "open" | "mcq" =
+      questionType === "mcq" || (choices?.length ?? 0) > 0 ? "mcq" : "open";
     // Best-effort: keep rows that have at least a prompt OR a correct answer.
     if (!prompt && !correctAnswer) continue;
     results.push({
       prompt: prompt || (correctAnswer ? `Question ${questionNumber ?? results.length + 1}` : ""),
-      correct_answer: correctAnswer || (questionType === "mcq" ? "" : "—"),
-      marks: questionType === "mcq" ? Math.max(1, marks || 1) : marks || 1,
+      correct_answer: correctAnswer || (resolvedType === "mcq" ? "" : "—"),
+      marks: resolvedType === "mcq" ? Math.max(1, marks || 1) : marks || 1,
       topic,
-      question_type: questionType,
+      question_type: resolvedType,
       choices,
       question_number: questionNumber,
     });

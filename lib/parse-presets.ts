@@ -105,7 +105,8 @@ export function mapPresetToReducto(preset: DocumentParsePreset): ReductoParseMap
         intelligentOrdering: false,
         deepExtract: false,
         promptSuffix:
-          "Document is a clean typed PDF with embedded text. Prefer exact printed content.",
+          "Document is a clean typed PDF with embedded text. Prefer exact printed content. " +
+          "For MCQ questions with printed options, always fill choices with every A–E option's full text.",
       };
     case "scanned_or_photo":
       return {

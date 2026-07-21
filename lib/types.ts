@@ -67,6 +67,9 @@ export type TestQuestion = {
   prompt: string;
   marks: number;
   sort_order: number;
+  question_type?: "open" | "mcq";
+  /** MCQ options for students (and teachers). Never includes which is correct. */
+  choices?: Array<{ key: string; text: string }> | null;
   /** Present for teachers only — never sent to students. */
   correct_answer?: string;
 };
