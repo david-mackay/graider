@@ -145,6 +145,8 @@ export async function POST(request: NextRequest) {
             correctAnswer: key.correctAnswer,
             marks: key.marks,
             topic: "Onboarding",
+            questionType: key.questionType === "mcq" ? "mcq" : "open",
+            choices: key.choices ?? null,
           })
           .returning({ id: questionBank.id });
         if (!questionRow) throw new Error("Failed to create sample question.");

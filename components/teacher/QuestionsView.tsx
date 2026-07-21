@@ -36,12 +36,14 @@ export default function QuestionsView({
   const [answer, setAnswer] = useState("");
   const [topic, setTopic] = useState("");
   const [marks, setMarks] = useState("2");
+  const [questionType, setQuestionType] = useState<"open" | "mcq">("open");
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editPrompt, setEditPrompt] = useState("");
   const [editAnswer, setEditAnswer] = useState("");
   const [editTopic, setEditTopic] = useState("");
   const [editMarks, setEditMarks] = useState("2");
+  const [editQuestionType, setEditQuestionType] = useState<"open" | "mcq">("open");
 
   const grouped: GroupedQuestions[] = (() => {
     const map = new Map<string, DashboardQuestion[]>();
@@ -75,10 +77,11 @@ export default function QuestionsView({
             correct_answer: answer,
             marks: Number(marks),
             topic,
+            question_type: questionType,
           }),
         }),
       );
-      setPrompt(""); setAnswer(""); setTopic(""); setMarks("2");
+      setPrompt(""); setAnswer(""); setTopic(""); setMarks("2"); setQuestionType("open");
       setShowAddForm(false);
       onStatus("Question added.");
       await onChanged();
@@ -95,6 +98,7 @@ export default function QuestionsView({
     setEditAnswer(q.correct_answer);
     setEditTopic(q.topic ?? "");
     setEditMarks(String(q.marks));
+    setEditQuestionType(q.question_type === "mcq" ? "mcq" : "open");
   }
 
   async function saveEdit(event: FormEvent<HTMLFormElement>) {
@@ -112,6 +116,7 @@ export default function QuestionsView({
             correct_answer: editAnswer,
             marks: Number(editMarks),
             topic: editTopic,
+            question_type: editQuestionType,
           }),
         }),
       );
@@ -182,7 +187,21 @@ export default function QuestionsView({
             <Card className="border-ink-faint">
               <h3 className="mb-4 text-sm font-semibold text-ink">New question</h3>
               <form onSubmit={createQuestion} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <FormField label="Type">
+                    <select
+                      className={inputClass}
+                      value={questionType}
+                      onChange={(e) => {
+                        const next = e.target.value === "mcq" ? "mcq" : "open";
+                        setQuestionType(next);
+                        if (next === "mcq") setMarks("1");
+                      }}
+                    >
+                      <option value="open">Open-ended</option>
+                      <option value="mcq">Multiple choice</option>
+                    </select>
+                  </FormField>
                   <FormField label="Topic" hint="Groups questions by subject area (e.g. Cell Biology)">
                     <input className={inputClass} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Photosynthesis" autoFocus />
                   </FormField>
@@ -199,12 +218,19 @@ export default function QuestionsView({
                     required
                   />
                 </FormField>
-                <FormField label="Answer key" hint="The model answer AI uses for grading — be specific and detailed. Students won't see this.">
+                <FormField
+                  label={questionType === "mcq" ? "Correct letter" : "Answer key"}
+                  hint={
+                    questionType === "mcq"
+                      ? "Letter only (A–E). Graded by exact match."
+                      : "The model answer AI uses for grading — be specific and detailed. Students won't see this."
+                  }
+                >
                   <textarea
                     className={`${inputClass} min-h-[80px] resize-y`}
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
-                    placeholder="Write the ideal answer. More detail = better AI grading accuracy."
+                    placeholder={questionType === "mcq" ? "B" : "Write the ideal answer. More detail = better AI grading accuracy."}
                     required
                   />
                 </FormField>
@@ -270,7 +296,19 @@ export default function QuestionsView({
                         {editId === q.id ? (
                           <form onSubmit={saveEdit} className="space-y-3">
                             <p className="text-xs font-semibold text-pen uppercase tracking-wide">Editing question</p>
-                            <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <FormField label="Type">
+                                <select
+                                  className={inputClass}
+                                  value={editQuestionType}
+                                  onChange={(e) =>
+                                    setEditQuestionType(e.target.value === "mcq" ? "mcq" : "open")
+                                  }
+                                >
+                                  <option value="open">Open-ended</option>
+                                  <option value="mcq">Multiple choice</option>
+                                </select>
+                              </FormField>
                               <FormField label="Topic">
                                 <input className={inputClass} value={editTopic} onChange={(e) => setEditTopic(e.target.value)} placeholder="Topic" />
                               </FormField>
@@ -281,7 +319,14 @@ export default function QuestionsView({
                             <FormField label="Question">
                               <textarea className={`${inputClass} min-h-[80px]`} value={editPrompt} onChange={(e) => setEditPrompt(e.target.value)} required />
                             </FormField>
-                            <FormField label="Answer key" hint="Be specific — this is what AI grades against.">
+                            <FormField
+                              label={editQuestionType === "mcq" ? "Correct letter" : "Answer key"}
+                              hint={
+                                editQuestionType === "mcq"
+                                  ? "Letter only (A–E)."
+                                  : "Be specific — this is what AI grades against."
+                              }
+                            >
                               <textarea className={`${inputClass} min-h-[60px]`} value={editAnswer} onChange={(e) => setEditAnswer(e.target.value)} required />
                             </FormField>
                             <div className="flex gap-2">
@@ -293,9 +338,13 @@ export default function QuestionsView({
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-ink leading-snug">{q.prompt}</p>
-                              <p className="mt-1.5 text-xs text-ink-faint">Answer key: <span className="italic">{q.correct_answer}</span></p>
+                              <p className="mt-1.5 text-xs text-ink-faint">
+                                {q.question_type === "mcq" ? "Correct letter: " : "Answer key: "}
+                                <span className="italic">{q.correct_answer}</span>
+                              </p>
                             </div>
                             <div className="flex flex-shrink-0 items-center gap-2">
+                              {q.question_type === "mcq" ? <Badge variant="gray">MCQ</Badge> : null}
                               <Badge variant="gray">{q.marks} mark{q.marks !== 1 ? "s" : ""}</Badge>
                               <button className={`${btnSecondary} py-1.5 px-3 text-xs`} type="button" onClick={() => startEdit(q)}>Edit</button>
                               <button className={`${btnDanger} py-1.5 px-3`} type="button" onClick={() => void deleteQuestion(q.id)}>Delete</button>

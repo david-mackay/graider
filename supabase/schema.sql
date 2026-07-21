@@ -47,9 +47,14 @@ create table if not exists public.question_bank (
   correct_answer text not null,
   marks integer not null check (marks >= 0),
   topic text,
+  question_type text not null default 'open' check (question_type in ('open', 'mcq')),
+  choices jsonb,
   created_at timestamptz default timezone('utc', now()),
   updated_at timestamptz default timezone('utc', now())
 );
+
+alter table public.question_bank add column if not exists question_type text not null default 'open';
+alter table public.question_bank add column if not exists choices jsonb;
 
 create table if not exists public.tests (
   id uuid primary key default gen_random_uuid(),

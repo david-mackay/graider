@@ -21,7 +21,14 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     await requireClassAccess(classId, ["teacher"]);
 
-    const updates: Partial<{ prompt: string; correctAnswer: string; marks: number; topic: string | null }> = {};
+    const updates: Partial<{
+      prompt: string;
+      correctAnswer: string;
+      marks: number;
+      topic: string | null;
+      questionType: string;
+      choices: Array<{ key: string; text: string }> | null;
+    }> = {};
     if (payload.prompt?.trim()) {
       updates.prompt = payload.prompt.trim();
     }
@@ -37,6 +44,22 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     }
     if ("topic" in payload) {
       updates.topic = typeof payload.topic === "string" ? payload.topic.trim() || null : null;
+    }
+    if (payload.question_type === "mcq" || payload.question_type === "open") {
+      updates.questionType = payload.question_type;
+    }
+    if ("choices" in payload) {
+      if (payload.choices === null) {
+        updates.choices = null;
+      } else if (Array.isArray(payload.choices)) {
+        updates.choices = payload.choices
+          .filter(
+            (c): c is { key: string; text: string } =>
+              typeof c?.key === "string" && typeof c?.text === "string",
+          )
+          .map((c) => ({ key: c.key.trim().toUpperCase().slice(0, 1), text: c.text.trim() }))
+          .filter((c) => /^[A-E]$/.test(c.key));
+      }
     }
 
     if (!Object.keys(updates).length) {
@@ -84,6 +107,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       correct_answer: data.correctAnswer,
       marks: data.marks,
       topic: data.topic,
+      question_type: data.questionType === "mcq" ? "mcq" : "open",
+      choices: (data.choices as QuestionBankQuestion["choices"]) ?? null,
       created_at: data.createdAt?.toISOString() ?? null,
       updated_at: data.updatedAt?.toISOString() ?? null,
     };

@@ -6,6 +6,8 @@ export type OnboardingAnswerKey = {
   prompt: string;
   correctAnswer: string;
   marks: number;
+  questionType?: "open" | "mcq";
+  choices?: Array<{ key: string; text: string }> | null;
 };
 
 export type OnboardingPaper = {

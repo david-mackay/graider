@@ -42,6 +42,8 @@ async function insertQuestions(params: {
         correctAnswer: q.correct_answer,
         marks: q.marks,
         topic: q.topic ?? null,
+        questionType: q.question_type === "mcq" ? "mcq" : "open",
+        choices: q.choices ?? null,
       })),
     )
     .returning({ id: questionBank.id });

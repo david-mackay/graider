@@ -133,6 +133,7 @@ export async function extractHandwrittenAnswers(
     type: "text" as const,
     text:
       "You are reading a photographed handwritten test. Read each question and corresponding answer exactly as written. " +
+      "For multiple-choice questions, return the selected letter (A–E) when the student circled, bubbled, or marked an option. " +
       "Return strict JSON with this shape: {\"answers\":[{\"question\":\"...\",\"answer\":\"...\",\"question_index\":0}]}. " +
       "question_index is optional and should be the position number if it appears on paper.",
   };
@@ -199,6 +200,7 @@ export async function extractHandwrittenStudentBucket(
       "The teacher already assigned this student — do NOT read or guess any student name. " +
       `Pages are in order; use these global pageIndex values exactly: ${indexList}. ` +
       "For each page extract every question prompt and the student's handwritten answer. " +
+      "For multiple-choice items, return the selected letter (A–E) when circled, bubbled, or marked. " +
       "Return strict JSON: " +
       `{"pages":[{"pageIndex":${globalPageIndices[0] ?? 0},"answers":[{"question":"...","answer":"...","question_index":0}]}]}. ` +
       "Include exactly one pages entry per image, in order.",
@@ -310,6 +312,7 @@ export async function extractHandwrittenStack(
       "one student per page. The pages are provided in order; treat each image as a separate page indexed starting at 0. " +
       "For each page do two things: (1) read the student's name written at the top of the paper (handwritten name field), " +
       "and (2) extract every question and the student's corresponding answer exactly as written. " +
+      "For multiple-choice items, return the selected letter (A–E) when circled, bubbled, or marked. " +
       "Return strict JSON with this exact shape and one entry per image, in order: " +
       "{\"pages\":[{\"pageIndex\":0,\"studentName\":\"...\",\"confidence\":0.9," +
       "\"answers\":[{\"question\":\"...\",\"answer\":\"...\",\"question_index\":0}]}]}. " +
@@ -391,11 +394,50 @@ function normalizeParsedQuestions(raw: unknown): ParsedImportQuestion[] {
     const marks = Number.isFinite(marksRaw) ? Math.max(0, Math.round(marksRaw)) : 1;
     const topic =
       typeof record.topic === "string" && record.topic.trim() ? record.topic.trim() : null;
-    if (!prompt || !correctAnswer) continue;
-    results.push({ prompt, correct_answer: correctAnswer, marks, topic });
+    const questionType =
+      record.question_type === "mcq" || record.questionType === "mcq" ? "mcq" : "open";
+    const choicesRaw = record.choices;
+    let choices: ParsedImportQuestion["choices"] = null;
+    if (Array.isArray(choicesRaw) && choicesRaw.length > 0) {
+      const parsed: NonNullable<ParsedImportQuestion["choices"]> = [];
+      for (const choice of choicesRaw) {
+        if (typeof choice !== "object" || choice === null) continue;
+        const c = choice as Record<string, unknown>;
+        const key =
+          typeof c.key === "string"
+            ? c.key.trim().toUpperCase().slice(0, 1)
+            : typeof c.letter === "string"
+              ? c.letter.trim().toUpperCase().slice(0, 1)
+              : "";
+        const text = typeof c.text === "string" ? c.text.trim() : "";
+        if (!key || !/^[A-E]$/.test(key)) continue;
+        parsed.push({ key, text });
+      }
+      choices = parsed.length > 0 ? parsed : null;
+    }
+    // Best-effort: keep rows that have at least a prompt OR a correct answer.
+    if (!prompt && !correctAnswer) continue;
+    results.push({
+      prompt: prompt || (correctAnswer ? `Question ${results.length + 1}` : ""),
+      correct_answer: correctAnswer || (questionType === "mcq" ? "" : "—"),
+      marks: questionType === "mcq" ? Math.max(1, marks || 1) : marks || 1,
+      topic,
+      question_type: questionType,
+      choices,
+    });
   }
   return results;
 }
+
+const MCQ_PARSE_HINT =
+  `Best-effort extraction for a teacher review screen — prefer what you are confident about; omit rather than invent.\n` +
+  `For each question include: prompt, correct_answer, marks (integer), topic, question_type ("open"|"mcq"), choices.\n` +
+  `MCQ rules:\n` +
+  `- If options a/b/c/d (or A–E) appear, set question_type to "mcq", fill choices as [{"key":"A","text":"..."}], and set correct_answer to the letter only (e.g. "B").\n` +
+  `- Letter-only answer keys (e.g. "1. B  2. A") → one mcq row per number, prompt like "Question 1", choices null, correct_answer = letter.\n` +
+  `- Circled/bubbled/highlighted options in images → return the marked letter as correct_answer.\n` +
+  `- Never invent options or answers not on the page. Partial lists are OK.\n` +
+  `- Open-ended questions use question_type "open" and a prose correct_answer.\n`;
 
 export async function parseQuestionBankFromText(text: string): Promise<ParsedImportQuestion[]> {
   const parsed = await callOpenRouter(
@@ -403,14 +445,14 @@ export async function parseQuestionBankFromText(text: string): Promise<ParsedImp
       {
         role: "system",
         content:
-          "You extract structured exam questions from documents. Return JSON only.",
+          "You extract structured exam questions from documents. Return JSON only. Best-effort for teacher review.",
       },
       {
         role: "user",
         content:
           `Extract every question from this document for a teacher question bank.\n` +
-          `For each question include: prompt (student-facing), correct_answer (model answer), marks (integer), topic (short subject label).\n` +
-          `Return JSON: {"questions":[{"prompt":"...","correct_answer":"...","marks":2,"topic":"..."}]}\n\n` +
+          MCQ_PARSE_HINT +
+          `Return JSON: {"questions":[{"prompt":"...","correct_answer":"...","marks":2,"topic":"...","question_type":"open","choices":null}]}\n\n` +
           `Document:\n${text}`,
       },
     ],
@@ -428,13 +470,14 @@ export async function parseTestFromText(text: string): Promise<{ title: string; 
     [
       {
         role: "system",
-        content: "You extract structured tests from documents. Return JSON only.",
+        content: "You extract structured tests from documents. Return JSON only. Best-effort for teacher review.",
       },
       {
         role: "user",
         content:
           `Extract a test title and all questions from this document.\n` +
-          `Return JSON: {"title":"...","questions":[{"prompt":"...","correct_answer":"...","marks":2,"topic":"..."}]}\n\n` +
+          MCQ_PARSE_HINT +
+          `Return JSON: {"title":"...","questions":[{"prompt":"...","correct_answer":"...","marks":2,"topic":"...","question_type":"open","choices":null}]}\n\n` +
           `Document:\n${text}`,
       },
     ],
@@ -446,6 +489,52 @@ export async function parseTestFromText(text: string): Promise<{ title: string; 
     throw new Error("No questions found in the test PDF.");
   }
   return { title, questions };
+}
+
+export async function parseAnswerKeyFromImages(
+  images: { filename: string; mimeType: string; base64: string }[],
+): Promise<ParsedImportQuestion[]> {
+  if (images.length === 0) {
+    throw new Error("At least one image is required.");
+  }
+
+  const imageParts = images.map((entry) => ({
+    type: "image_url" as const,
+    image_url: {
+      url: `data:${entry.mimeType};base64,${entry.base64}`,
+    },
+  }));
+
+  const parsed = await callOpenRouter(
+    [
+      {
+        role: "system",
+        content:
+          "You extract answer keys and exam questions from photos. Return JSON only. Best-effort for teacher review.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text:
+              "These photos are a teacher answer key and/or MCQ sheet. " +
+              MCQ_PARSE_HINT +
+              'If answers are circled, bubbled, or marked, use the marked letter. ' +
+              'Return JSON: {"questions":[{"prompt":"...","correct_answer":"...","marks":1,"topic":null,"question_type":"mcq","choices":null}]}',
+          },
+          ...imageParts,
+        ],
+      },
+    ],
+    DEFAULT_VISION_MODEL,
+  );
+
+  const questions = normalizeParsedQuestions(parsed.questions);
+  if (questions.length === 0) {
+    throw new Error("Could not read questions from those photos. Add them manually in review.");
+  }
+  return questions;
 }
 
 export async function parseTestFromStackImages(
@@ -482,7 +571,8 @@ export async function parseTestFromStackImages(
               "(infer from the question when no answer key is visible). " +
               "When point values or marks are printed on the paper (e.g. '(2 marks)', '[3 pts]'), use those exact values. " +
               "Only infer marks when none are visible on the page. " +
-              "Return JSON: {\"title\":\"...\",\"questions\":[{\"prompt\":\"...\",\"correct_answer\":\"...\",\"marks\":2,\"topic\":\"...\"}]}",
+              "Set question_type to \"mcq\" when options A–E appear; otherwise \"open\". Include choices when visible. " +
+              "Return JSON: {\"title\":\"...\",\"questions\":[{\"prompt\":\"...\",\"correct_answer\":\"...\",\"marks\":2,\"topic\":\"...\",\"question_type\":\"open\",\"choices\":null}]}",
           },
           ...imageParts,
         ],

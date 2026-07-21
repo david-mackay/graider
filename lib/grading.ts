@@ -1,4 +1,5 @@
 import { gradeQuestion } from "@/lib/openrouter";
+import { gradeMcqExact } from "@/lib/mcq";
 import { db } from "@/lib/db";
 import { testAttempts, testQuestions, questionBank, attemptAnswers } from "@/drizzle/schema";
 import { eq, asc } from "drizzle-orm";
@@ -17,6 +18,7 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
       prompt: questionBank.prompt,
       correctAnswer: questionBank.correctAnswer,
       marks: questionBank.marks,
+      questionType: questionBank.questionType,
     })
     .from(testQuestions)
     .innerJoin(questionBank, eq(testQuestions.questionId, questionBank.id))
@@ -45,12 +47,19 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
     const answer = answerByQuestion.get(question.questionId);
     const studentAnswer = answer?.studentAnswer ?? "";
 
-    const grade = await gradeQuestion({
-      question: question.prompt,
-      marks: question.marks,
-      teacher_answer: question.correctAnswer,
-      student_answer: studentAnswer,
-    });
+    const grade =
+      question.questionType === "mcq"
+        ? gradeMcqExact({
+            teacherAnswer: question.correctAnswer,
+            studentAnswer,
+            marks: question.marks,
+          })
+        : await gradeQuestion({
+            question: question.prompt,
+            marks: question.marks,
+            teacher_answer: question.correctAnswer,
+            student_answer: studentAnswer,
+          });
 
     maxTotal += question.marks;
     earnedTotal += grade.marks_earned;

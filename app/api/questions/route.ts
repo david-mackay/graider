@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
       correct_answer: row.correctAnswer,
       marks: row.marks,
       topic: row.topic,
+      question_type: row.questionType === "mcq" ? "mcq" : "open",
+      choices: (row.choices as QuestionBankQuestion["choices"]) ?? null,
       created_at: row.createdAt?.toISOString() ?? null,
       updated_at: row.updatedAt?.toISOString() ?? null,
     }));
@@ -60,6 +62,17 @@ export async function POST(request: NextRequest) {
     const correctAnswer = payload.correct_answer?.trim();
     const marks = Number(payload.marks);
     const topic = payload.topic?.trim() || null;
+    const questionType = payload.question_type === "mcq" ? "mcq" : "open";
+    const choices =
+      questionType === "mcq" && Array.isArray(payload.choices)
+        ? payload.choices
+            .filter(
+              (c): c is { key: string; text: string } =>
+                typeof c?.key === "string" && typeof c?.text === "string",
+            )
+            .map((c) => ({ key: c.key.trim().toUpperCase().slice(0, 1), text: c.text.trim() }))
+            .filter((c) => /^[A-E]$/.test(c.key))
+        : null;
 
     if (!classId || !prompt || !correctAnswer || Number.isNaN(marks) || marks < 0) {
       return NextResponse.json(
@@ -79,6 +92,8 @@ export async function POST(request: NextRequest) {
         correctAnswer,
         marks,
         topic,
+        questionType,
+        choices,
       })
       .returning();
 
@@ -94,6 +109,8 @@ export async function POST(request: NextRequest) {
       correct_answer: data.correctAnswer,
       marks: data.marks,
       topic: data.topic,
+      question_type: data.questionType === "mcq" ? "mcq" : "open",
+      choices: (data.choices as QuestionBankQuestion["choices"]) ?? null,
       created_at: data.createdAt?.toISOString() ?? null,
       updated_at: data.updatedAt?.toISOString() ?? null,
     };

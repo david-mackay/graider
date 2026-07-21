@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Buffer } from "buffer";
 import { extractHandwrittenAnswers, gradeQuestion } from "@/lib/openrouter";
+import { gradeMcqExact } from "@/lib/mcq";
 import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import type { OnboardingAnswerKey, OnboardingQuestionGrade } from "@/lib/onboarding/types";
 import type { SampleGradeResponse } from "@/lib/types";
@@ -44,7 +45,21 @@ function parseOneKey(record: Record<string, unknown>): OnboardingAnswerKey | nul
   ) {
     return null;
   }
-  return { prompt, correctAnswer, marks: marksRaw };
+  const questionType =
+    record.questionType === "mcq" || record.question_type === "mcq" ? "mcq" : "open";
+  let choices: OnboardingAnswerKey["choices"] = null;
+  if (Array.isArray(record.choices)) {
+    const parsed: NonNullable<OnboardingAnswerKey["choices"]> = [];
+    for (const entry of record.choices) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const c = entry as Record<string, unknown>;
+      const key = typeof c.key === "string" ? c.key.trim().toUpperCase().slice(0, 1) : "";
+      const text = typeof c.text === "string" ? c.text.trim() : "";
+      if (/^[A-E]$/.test(key)) parsed.push({ key, text });
+    }
+    choices = parsed.length > 0 ? parsed : null;
+  }
+  return { prompt, correctAnswer, marks: marksRaw, questionType, choices };
 }
 
 function parseAnswerKeys(raw: string | null): { value?: OnboardingAnswerKey[]; error?: string } {
@@ -111,12 +126,19 @@ async function gradeAgainstKeys(
       continue;
     }
 
-    const result = await gradeQuestion({
-      question: key.prompt,
-      marks: key.marks,
-      teacher_answer: key.correctAnswer,
-      student_answer: studentAnswer,
-    });
+    const result =
+      key.questionType === "mcq"
+        ? gradeMcqExact({
+            teacherAnswer: key.correctAnswer,
+            studentAnswer,
+            marks: key.marks,
+          })
+        : await gradeQuestion({
+            question: key.prompt,
+            marks: key.marks,
+            teacher_answer: key.correctAnswer,
+            student_answer: studentAnswer,
+          });
 
     questionGrades.push({
       prompt: key.prompt,

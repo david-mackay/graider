@@ -26,18 +26,41 @@ type ParseResponse = {
   truncated?: boolean;
   totalFound?: number;
   error?: string;
+  needsPhoto?: boolean;
 };
+
+function blankKey(): OnboardingAnswerKey {
+  return {
+    prompt: "",
+    correctAnswer: "",
+    marks: 1,
+    questionType: "open",
+    choices: null,
+  };
+}
+
+function normalizeIncoming(raw: OnboardingAnswerKey[]): OnboardingAnswerKey[] {
+  return raw.map((q) => ({
+    prompt: q.prompt ?? "",
+    correctAnswer: q.correctAnswer ?? "",
+    marks: Number.isInteger(q.marks) && q.marks > 0 ? q.marks : 1,
+    questionType: q.questionType === "mcq" ? "mcq" : "open",
+    choices: Array.isArray(q.choices) ? q.choices : null,
+  }));
+}
 
 export default function OnboardingAnswerKeyPage() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"choose" | "manual" | "preview">("choose");
   const [keys, setKeys] = useState<OnboardingAnswerKey[]>([]);
-  const [pdfName, setPdfName] = useState<string | null>(null);
+  const [uploadName, setUploadName] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [marks, setMarks] = useState(5);
+  const [manualType, setManualType] = useState<"open" | "mcq">("open");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -47,64 +70,115 @@ export default function OnboardingAnswerKeyPage() {
     const existing = normalizeAnswerKeys(vault);
     if (existing.length > 0) {
       /* eslint-disable react-hooks/set-state-in-effect */
-      setKeys(existing);
+      setKeys(normalizeIncoming(existing));
       setMode(vault?.answerKeySource === "manual" && existing.length === 1 ? "manual" : "preview");
       if (existing.length === 1) {
         setPrompt(existing[0].prompt);
         setCorrectAnswer(existing[0].correctAnswer);
         setMarks(existing[0].marks);
+        setManualType(existing[0].questionType === "mcq" ? "mcq" : "open");
       }
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, []);
 
-  async function onPickPdf(file: File | null) {
-    if (!file) return;
+  async function parseUpload(formData: FormData, label: string) {
     setError(null);
     setBusy(true);
-    setPdfName(file.name);
+    setUploadName(label);
     try {
-      const formData = new FormData();
-      formData.append("pdf", file, file.name);
       const res = await fetch("/api/onboarding/parse-answer-key", {
         method: "POST",
         body: formData,
       });
-      // The server can fail before it returns JSON (timeout / body-too-large →
-      // HTML error page). Read text first so we don't surface a raw JSON error.
       const raw = await res.text();
       let payload: ParseResponse;
       try {
         payload = JSON.parse(raw) as ParseResponse;
       } catch {
         if (res.status === 413) {
-          throw new Error("PDF is too large. Keep it under 4 MB, or add the key manually.");
+          throw new Error("File is too large. Keep it under 4 MB, or add the key manually.");
         }
         throw new Error(
-          "That upload didn't go through — the PDF may be too large or took too long. Try a smaller PDF or add the key manually.",
+          "That upload didn't go through — the file may be too large or took too long. Try a smaller file or add the key manually.",
         );
       }
+      const questions = normalizeIncoming(payload.questions ?? []);
       if (!res.ok) {
-        throw new Error(payload.error ?? "Could not read that PDF.");
+        if (payload.needsPhoto || questions.length === 0) {
+          setKeys([blankKey()]);
+          setMode("preview");
+          setError(
+            payload.error ??
+              "We couldn't prefill from that file. Tweak the review below, or photograph the key.",
+          );
+          return;
+        }
+        throw new Error(payload.error ?? "Could not read that answer key.");
       }
-      const questions = payload.questions ?? [];
       if (questions.length === 0) {
-        throw new Error("No questions found in that PDF.");
+        setKeys([blankKey()]);
+        setMode("preview");
+        setError("Nothing found — add questions in the review below.");
+        return;
       }
       setKeys(questions);
       setTruncated(Boolean(payload.truncated));
       setMode("preview");
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not read that PDF.");
-      setPdfName(null);
+      setError(err instanceof Error ? err.message : "Could not read that answer key.");
+      setUploadName(null);
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
+      if (imageRef.current) imageRef.current.value = "";
     }
   }
 
+  async function onPickPdf(file: File | null) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("pdf", file, file.name);
+    await parseUpload(formData, file.name);
+  }
+
+  async function onPickImages(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const formData = new FormData();
+    Array.from(files).forEach((file, index) => {
+      formData.append("image", file, file.name || `key-${index + 1}.jpg`);
+    });
+    await parseUpload(formData, files.length === 1 ? files[0].name : `${files.length} photos`);
+  }
+
+  function updateKey(index: number, patch: Partial<OnboardingAnswerKey>) {
+    setKeys((prev) => prev.map((key, i) => (i === index ? { ...key, ...patch } : key)));
+  }
+
+  function removeKey(index: number) {
+    setKeys((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [blankKey()];
+    });
+  }
+
   function continueWithKeys(nextKeys: OnboardingAnswerKey[], source: "pdf" | "manual") {
-    setVault(answerKeyVaultUpdate(nextKeys, source));
+    const cleaned = nextKeys
+      .map((q) => ({
+        ...q,
+        prompt: q.prompt.trim(),
+        correctAnswer: q.correctAnswer.trim(),
+        marks: Number.isInteger(q.marks) && q.marks > 0 ? q.marks : 1,
+        questionType: q.questionType === "mcq" ? ("mcq" as const) : ("open" as const),
+        choices: q.questionType === "mcq" ? q.choices ?? null : null,
+      }))
+      .filter((q) => q.prompt && q.correctAnswer);
+    if (cleaned.length === 0) {
+      setError("Add at least one question with a prompt and correct answer.");
+      return;
+    }
+    setVault(answerKeyVaultUpdate(cleaned, source));
     router.push("/onboarding/upload");
   }
 
@@ -126,12 +200,20 @@ export default function OnboardingAnswerKeyPage() {
       return;
     }
     continueWithKeys(
-      [{ prompt: trimmedPrompt, correctAnswer: trimmedAnswer, marks }],
+      [
+        {
+          prompt: trimmedPrompt,
+          correctAnswer: trimmedAnswer,
+          marks,
+          questionType: manualType,
+          choices: null,
+        },
+      ],
       "manual",
     );
   }
 
-  const totalMarks = keys.reduce((sum, key) => sum + key.marks, 0);
+  const totalMarks = keys.reduce((sum, key) => sum + (Number.isFinite(key.marks) ? key.marks : 0), 0);
 
   return (
     <OnboardingShell step={3} backHref="/onboarding/capabilities">
@@ -141,8 +223,8 @@ export default function OnboardingAnswerKeyPage() {
           Bring the answer key you already trust.
         </h1>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
-          Upload the full PDF — the same way you would in the app — and we&apos;ll pull every
-          question. Or type one question if you just want a quick taste.
+          Upload a PDF or photo — including MCQ letter keys or circled answers. We&apos;ll prefill
+          what we can; you tweak the review before grading.
         </p>
       </div>
 
@@ -151,11 +233,11 @@ export default function OnboardingAnswerKeyPage() {
           <div className="rounded-2xl border border-line bg-paper p-5 text-left shadow-paper">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-pen">Recommended</p>
             <h2 className="mt-2 font-display text-xl font-semibold text-ink">
-              Upload your answer key PDF
+              Upload your answer key
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-              Drop in the key for this test. Graider extracts prompts, model answers, and marks —
-              then you photograph student papers against <em className="not-italic font-semibold text-ink">your</em> rubric.
+              PDF for typed keys, or a photo if answers are circled / the PDF is a scan. Best-effort
+              prefill — you&apos;ll review every question next.
             </p>
             <input
               ref={fileRef}
@@ -164,39 +246,125 @@ export default function OnboardingAnswerKeyPage() {
               className="sr-only"
               onChange={(e) => void onPickPdf(e.target.files?.[0] ?? null)}
             />
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-              className={`${btnPrimary} mt-4 w-full justify-center py-3 disabled:opacity-60`}
-            >
-              {busy ? "Reading your PDF…" : pdfName ? `Replace · ${pdfName}` : "Choose PDF answer key"}
-            </button>
+            <input
+              ref={imageRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              onChange={(e) => void onPickImages(e.target.files)}
+            />
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => fileRef.current?.click()}
+                className={`${btnPrimary} w-full justify-center py-3 disabled:opacity-60`}
+              >
+                {busy ? "Reading…" : uploadName?.endsWith(".pdf") ? `Replace · ${uploadName}` : "Choose PDF"}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => imageRef.current?.click()}
+                className={`${btnSecondary} w-full justify-center py-3 disabled:opacity-60`}
+              >
+                {busy ? "Reading…" : "Upload photo(s)"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-ink-faint">
+              Circled answers? Photograph the marked key — circles aren&apos;t in PDF text.
+            </p>
           </div>
 
-          {mode === "preview" && keys.length > 0 ? (
+          {mode === "preview" ? (
             <div className="rounded-2xl border border-line bg-cream/50 p-5 text-left">
               <p className="text-sm font-semibold text-ink">
-                Found {keys.length} question{keys.length === 1 ? "" : "s"} · {totalMarks} marks
+                Review {keys.length} question{keys.length === 1 ? "" : "s"} · {totalMarks} marks
+              </p>
+              <p className="mt-1 text-xs text-ink-faint">
+                Prefill is a draft — fix letters, stems, and types before continuing.
               </p>
               {truncated ? (
                 <p className="mt-1 text-xs text-ink-faint">
                   Showing the first {keys.length} for this free demo. Sign up to keep the full bank.
                 </p>
               ) : null}
-              <ul className="mt-4 max-h-56 space-y-3 overflow-y-auto">
+              <ul className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto">
                 {keys.map((key, index) => (
-                  <li key={`${index}-${key.prompt.slice(0, 24)}`} className="rounded-xl border border-line bg-paper px-3 py-2.5">
-                    <p className="text-xs font-bold uppercase tracking-wide text-ink-faint">
-                      Q{index + 1} · {key.marks} mark{key.marks === 1 ? "" : "s"}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-ink line-clamp-2">{key.prompt}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-ink-soft line-clamp-2">
-                      Key: {key.correctAnswer}
-                    </p>
+                  <li
+                    key={`row-${index}`}
+                    className="space-y-2 rounded-xl border border-line bg-paper px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-bold uppercase tracking-wide text-ink-faint">
+                        Q{index + 1}
+                      </p>
+                      <select
+                        value={key.questionType === "mcq" ? "mcq" : "open"}
+                        onChange={(e) =>
+                          updateKey(index, {
+                            questionType: e.target.value === "mcq" ? "mcq" : "open",
+                            marks: e.target.value === "mcq" ? 1 : key.marks,
+                          })
+                        }
+                        className={`${inputClass} !py-1.5 text-xs`}
+                      >
+                        <option value="open">Open</option>
+                        <option value="mcq">MCQ</option>
+                      </select>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={key.marks}
+                        onChange={(e) => {
+                          const next = Number.parseInt(e.target.value, 10);
+                          updateKey(index, { marks: Number.isFinite(next) ? next : 1 });
+                        }}
+                        className={`${inputClass} !max-w-20 !py-1.5 text-xs`}
+                        aria-label="Marks"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeKey(index)}
+                        className="ml-auto text-xs font-bold text-ink-faint hover:text-pen"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <textarea
+                      value={key.prompt}
+                      onChange={(e) => updateKey(index, { prompt: e.target.value })}
+                      rows={2}
+                      className={inputClass}
+                      placeholder="Question prompt"
+                    />
+                    <input
+                      value={key.correctAnswer}
+                      onChange={(e) => updateKey(index, { correctAnswer: e.target.value })}
+                      className={inputClass}
+                      placeholder={key.questionType === "mcq" ? "Correct letter (e.g. B)" : "Correct answer"}
+                    />
+                    {key.questionType === "mcq" && key.choices && key.choices.length > 0 ? (
+                      <ul className="space-y-0.5 text-xs text-ink-soft">
+                        {key.choices.map((c) => (
+                          <li key={c.key}>
+                            <span className="font-semibold text-ink">{c.key}.</span> {c.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </li>
                 ))}
               </ul>
+              <button
+                type="button"
+                onClick={() => setKeys((prev) => [...prev, blankKey()])}
+                className="mt-3 text-sm font-bold text-ink-soft underline decoration-line underline-offset-4 hover:text-pen"
+              >
+                Add question
+              </button>
               <button
                 type="button"
                 onClick={() => continueWithKeys(keys, "pdf")}
@@ -215,7 +383,7 @@ export default function OnboardingAnswerKeyPage() {
             }}
             className="w-full text-center text-sm font-bold text-ink-soft underline decoration-line underline-offset-4 transition-colors hover:text-pen"
           >
-            Skip PDF — type one question quickly
+            Skip upload — type one question quickly
           </button>
         </div>
       ) : null}
@@ -223,8 +391,22 @@ export default function OnboardingAnswerKeyPage() {
       {mode === "manual" ? (
         <form onSubmit={onManualSubmit} className="mt-8 space-y-5">
           <p className="rounded-xl border border-line bg-cream/60 px-3.5 py-2.5 text-sm leading-relaxed text-ink-soft">
-            Quick route: one question is enough for the demo. You can import a full PDF after you sign up.
+            Quick route: one question is enough for the demo. You can import a full key after you sign up.
           </p>
+          <FormField label="Type">
+            <select
+              value={manualType}
+              onChange={(e) => {
+                const next = e.target.value === "mcq" ? "mcq" : "open";
+                setManualType(next);
+                if (next === "mcq") setMarks(1);
+              }}
+              className={inputClass}
+            >
+              <option value="open">Open-ended</option>
+              <option value="mcq">Multiple choice</option>
+            </select>
+          </FormField>
           <FormField label="Question prompt" hint="What you asked the student.">
             <textarea
               value={prompt}
@@ -237,15 +419,19 @@ export default function OnboardingAnswerKeyPage() {
           </FormField>
 
           <FormField
-            label="Correct answer"
-            hint="The model answer. Be specific — Graider uses this verbatim."
+            label={manualType === "mcq" ? "Correct letter" : "Correct answer"}
+            hint={
+              manualType === "mcq"
+                ? "Letter only (A–E). Grading is exact match."
+                : "The model answer. Be specific — Graider uses this verbatim."
+            }
           >
             <textarea
               value={correctAnswer}
               onChange={(e) => setCorrectAnswer(e.target.value)}
-              rows={4}
+              rows={manualType === "mcq" ? 1 : 4}
               className={inputClass}
-              placeholder={DEFAULT_CORRECT_ANSWER}
+              placeholder={manualType === "mcq" ? "B" : DEFAULT_CORRECT_ANSWER}
               required
             />
           </FormField>
@@ -278,7 +464,7 @@ export default function OnboardingAnswerKeyPage() {
               }}
               className={`${btnSecondary} w-full justify-center py-3`}
             >
-              Back to PDF upload
+              Back to upload
             </button>
           </div>
         </form>

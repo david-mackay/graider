@@ -83,6 +83,10 @@ export const questionBank = pgTable(
     correctAnswer: text("correct_answer").notNull(),
     marks: integer("marks").notNull(),
     topic: text("topic"),
+    /** 'open' | 'mcq' — MCQ grades by exact letter match. */
+    questionType: text("question_type").notNull().default("open"),
+    /** MCQ options when present: [{ key: "A", text: "..." }, ...]. Null for letter-only keys. */
+    choices: jsonb("choices").$type<Array<{ key: string; text: string }> | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
