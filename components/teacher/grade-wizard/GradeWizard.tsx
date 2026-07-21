@@ -96,7 +96,7 @@ export default function GradeWizard() {
   const activeId = activeStepId(state);
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       {showWelcome ? (
         <div className="mb-6 animate-rise rounded-2xl border border-moss/30 bg-moss-wash px-5 py-4 shadow-paper">
           <p className="font-hand text-2xl text-moss-deep">Your first paper is saved.</p>

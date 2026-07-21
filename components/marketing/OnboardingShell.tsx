@@ -6,6 +6,8 @@ type OnboardingShellProps = {
   step: 1 | 2 | 3 | 4 | 5 | 6;
   backHref?: string;
   backLabel?: string;
+  /** Wider column for review / multi-field editing screens. */
+  wide?: boolean;
   children: React.ReactNode;
 };
 
@@ -15,11 +17,14 @@ export default function OnboardingShell({
   step,
   backHref,
   backLabel = "Back",
+  wide = false,
   children,
 }: OnboardingShellProps) {
   return (
     <div className="min-h-[calc(100vh-3.5rem)]">
-      <div className="mx-auto w-full max-w-xl px-4 pt-8 pb-20 sm:pt-12">
+      <div
+        className={`mx-auto w-full px-4 pt-8 pb-20 sm:pt-12 ${wide ? "max-w-5xl" : "max-w-xl"}`}
+      >
         <ProgressDots current={step} />
 
         {backHref ? (

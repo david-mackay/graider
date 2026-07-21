@@ -216,13 +216,13 @@ export default function OnboardingAnswerKeyPage() {
   const totalMarks = keys.reduce((sum, key) => sum + (Number.isFinite(key.marks) ? key.marks : 0), 0);
 
   return (
-    <OnboardingShell step={3} backHref="/onboarding/capabilities">
+    <OnboardingShell step={3} backHref="/onboarding/capabilities" wide={mode === "preview"}>
       <div className="text-center">
         <p className="font-hand text-2xl text-pen">Set up the red pen</p>
         <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           Bring the answer key you already trust.
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
+        <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">
           Upload a PDF or photo — including MCQ letter keys or circled answers. We&apos;ll prefill
           what we can; you tweak the review before grading.
         </p>
@@ -272,29 +272,44 @@ export default function OnboardingAnswerKeyPage() {
                 {busy ? "Reading…" : "Upload photo(s)"}
               </button>
             </div>
-            <p className="mt-2 text-xs text-ink-faint">
-              Circled answers? Photograph the marked key — circles aren&apos;t in PDF text.
-            </p>
+            {busy ? (
+              <div className="mt-4 space-y-2" role="status" aria-live="polite">
+                <p className="text-xs font-semibold text-ink-soft">
+                  Reading your answer key…
+                </p>
+                <div className="h-1.5 overflow-hidden rounded-full bg-line">
+                  <div className="progress-indeterminate-bar h-full w-2/5 rounded-full bg-pen" />
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-ink-faint">
+                Scanned or circled keys work too — upload the PDF or a clear photo.
+              </p>
+            )}
           </div>
 
           {mode === "preview" ? (
-            <div className="rounded-2xl border border-line bg-cream/50 p-5 text-left">
-              <p className="text-sm font-semibold text-ink">
-                Review {keys.length} question{keys.length === 1 ? "" : "s"} · {totalMarks} marks
-              </p>
-              <p className="mt-1 text-xs text-ink-faint">
-                Prefill is a draft — fix letters, stems, and types before continuing.
-              </p>
-              {truncated ? (
-                <p className="mt-1 text-xs text-ink-faint">
-                  Showing the first {keys.length} for this free demo. Sign up to keep the full bank.
-                </p>
-              ) : null}
-              <ul className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto">
+            <div className="rounded-2xl border border-line bg-cream/50 p-5 text-left sm:p-6">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-ink">
+                    Review {keys.length} question{keys.length === 1 ? "" : "s"} · {totalMarks} marks
+                  </p>
+                  <p className="mt-1 text-xs text-ink-faint">
+                    Prefill is a draft — fix letters, stems, and types before continuing.
+                  </p>
+                </div>
+                {truncated ? (
+                  <p className="text-xs text-ink-faint">
+                    Showing the first {keys.length} for this free demo.
+                  </p>
+                ) : null}
+              </div>
+              <ul className="mt-5 max-h-[min(70vh,40rem)] space-y-4 overflow-y-auto pr-1">
                 {keys.map((key, index) => (
                   <li
                     key={`row-${index}`}
-                    className="space-y-2 rounded-xl border border-line bg-paper px-3 py-3"
+                    className="space-y-3 rounded-xl border border-line bg-paper px-4 py-4 sm:px-5"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-xs font-bold uppercase tracking-wide text-ink-faint">
@@ -308,7 +323,7 @@ export default function OnboardingAnswerKeyPage() {
                             marks: e.target.value === "mcq" ? 1 : key.marks,
                           })
                         }
-                        className={`${inputClass} !py-1.5 text-xs`}
+                        className={`${inputClass} !w-auto !py-1.5 text-xs`}
                       >
                         <option value="open">Open</option>
                         <option value="mcq">MCQ</option>
@@ -333,28 +348,35 @@ export default function OnboardingAnswerKeyPage() {
                         Remove
                       </button>
                     </div>
-                    <textarea
-                      value={key.prompt}
-                      onChange={(e) => updateKey(index, { prompt: e.target.value })}
-                      rows={2}
-                      className={inputClass}
-                      placeholder="Question prompt"
-                    />
-                    <input
-                      value={key.correctAnswer}
-                      onChange={(e) => updateKey(index, { correctAnswer: e.target.value })}
-                      className={inputClass}
-                      placeholder={key.questionType === "mcq" ? "Correct letter (e.g. B)" : "Correct answer"}
-                    />
-                    {key.questionType === "mcq" && key.choices && key.choices.length > 0 ? (
-                      <ul className="space-y-0.5 text-xs text-ink-soft">
-                        {key.choices.map((c) => (
-                          <li key={c.key}>
-                            <span className="font-semibold text-ink">{c.key}.</span> {c.text}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <textarea
+                        value={key.prompt}
+                        onChange={(e) => updateKey(index, { prompt: e.target.value })}
+                        rows={3}
+                        className={inputClass}
+                        placeholder="Question prompt"
+                      />
+                      <div className="space-y-2">
+                        <textarea
+                          value={key.correctAnswer}
+                          onChange={(e) => updateKey(index, { correctAnswer: e.target.value })}
+                          rows={key.questionType === "mcq" ? 1 : 3}
+                          className={inputClass}
+                          placeholder={
+                            key.questionType === "mcq" ? "Correct letter (e.g. B)" : "Correct answer"
+                          }
+                        />
+                        {key.questionType === "mcq" && key.choices && key.choices.length > 0 ? (
+                          <ul className="space-y-0.5 text-xs text-ink-soft">
+                            {key.choices.map((c) => (
+                              <li key={c.key}>
+                                <span className="font-semibold text-ink">{c.key}.</span> {c.text}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>

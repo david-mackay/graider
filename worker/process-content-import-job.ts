@@ -1,19 +1,28 @@
 import { db } from "@/lib/db";
 import { questionBank, testQuestions, tests } from "@/drizzle/schema";
-import { extractPdfText } from "@/lib/content-import-jobs/extract-pdf";
 import {
   completeContentImportJob,
   failContentImportJob,
   findContentImportJob,
   updateContentImportStatus,
 } from "@/lib/content-import-jobs/repository";
-import { parseQuestionBankFromText, parseTestFromText } from "@/lib/openrouter";
-import type { ContentImportResult } from "@/lib/types";
+import {
+  extractQuestionBankFromDocument,
+  extractTestFromDocument,
+} from "@/lib/reducto";
+import { readFile } from "@/lib/storage";
+import type { ContentImportResult, ParsedImportQuestion } from "@/lib/types";
+import path from "path";
+
+function filenameFromStoragePath(storagePath: string): string {
+  const base = path.basename(storagePath);
+  return base || "import.pdf";
+}
 
 async function insertQuestions(params: {
   teacherId: string;
   classId: string;
-  questions: Awaited<ReturnType<typeof parseQuestionBankFromText>>;
+  questions: ParsedImportQuestion[];
 }) {
   const rows = await db
     .insert(questionBank)
@@ -40,8 +49,12 @@ export async function processQuestionBankImportJob(jobId: string) {
 
   await updateContentImportStatus(jobId, "processing");
   try {
-    const text = await extractPdfText(job.storagePath);
-    const questions = await parseQuestionBankFromText(text);
+    const buffer = await readFile(job.storagePath);
+    const questions = await extractQuestionBankFromDocument({
+      buffer,
+      filename: filenameFromStoragePath(job.storagePath),
+      mimeType: "application/pdf",
+    });
     await insertQuestions({
       teacherId: job.teacherId,
       classId: job.classId,
@@ -63,8 +76,12 @@ export async function processTestImportJob(jobId: string) {
 
   await updateContentImportStatus(jobId, "processing");
   try {
-    const text = await extractPdfText(job.storagePath);
-    const parsed = await parseTestFromText(text);
+    const buffer = await readFile(job.storagePath);
+    const parsed = await extractTestFromDocument({
+      buffer,
+      filename: filenameFromStoragePath(job.storagePath),
+      mimeType: "application/pdf",
+    });
     const questionIds = await insertQuestions({
       teacherId: job.teacherId,
       classId: job.classId,

@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { Buffer } from "buffer";
 import { requireRole, requireClassAccess } from "@/lib/auth";
 import { uploadFile } from "@/lib/storage";
-import { extractHandwrittenAnswers } from "@/lib/openrouter";
+import { extractHandwrittenAnswers } from "@/lib/reducto";
 import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, ocrBatches } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { normalizeQuestion } from "@/lib/stack-grading";
 
 export const runtime = "nodejs";
+export const maxDuration = 90;
 
 function isFileLike(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;

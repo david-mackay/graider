@@ -40,7 +40,7 @@ export default function OnboardingResultPage() {
 
   if (!students) {
     return (
-      <OnboardingShell step={5} backHref="/onboarding/upload">
+      <OnboardingShell step={5} backHref="/onboarding/upload" wide>
         <div className="flex justify-center py-12">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-pen border-t-transparent" />
         </div>
@@ -52,13 +52,13 @@ export default function OnboardingResultPage() {
   const totalMax = students.reduce((sum, s) => sum + s.grade.maxMarks, 0);
 
   return (
-    <OnboardingShell step={5} backHref="/onboarding/upload" backLabel="Edit class">
+    <OnboardingShell step={5} backHref="/onboarding/upload" backLabel="Edit class" wide>
       <div className="text-center">
         <p className="font-hand text-2xl text-pen">Marked and handed back</p>
         <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
           Your class, graded
         </h1>
-        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
+        <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">
           {students.length} student{students.length === 1 ? "" : "s"} · {totalEarned}/{totalMax} marks
           total
         </p>

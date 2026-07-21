@@ -76,6 +76,19 @@
   }
 }
 
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.progress-indeterminate-bar {
+  animation: progress-indeterminate 1.15s ease-in-out infinite;
+}
+
 body {
   background-color: var(--color-cream);
   background-image: radial-gradient(

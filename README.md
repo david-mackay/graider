@@ -19,6 +19,7 @@ cp .env.example .env.local
 - Clerk publishable and secret keys
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - `OPENROUTER_API_KEY`
+- `REDUCTO_API_KEY` (answer-key / question-bank PDF & photo import)
 
 Clerk uses keyless mode by default, so you can run without setting Clerk keys first.
 

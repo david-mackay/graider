@@ -16,7 +16,7 @@ import {
   firstStudentPageIndices,
   previewStack,
 } from "@/lib/stack-grading";
-import { extractHandwrittenStack, extractStudentFirstPreview } from "@/lib/openrouter";
+import { extractHandwrittenStack, extractStudentFirstPreview } from "@/lib/reducto";
 import { discoverOrCreateTestForStack, deleteDraftTestIfUnused } from "@/lib/stack-test-discovery";
 import { notifyGradeStackJobUpdate } from "@/lib/grade-stack-jobs/notify";
 import { GradeStackQueueJobData } from "@/lib/grade-stack-jobs/queue";

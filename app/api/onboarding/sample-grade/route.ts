@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Buffer } from "buffer";
-import { extractHandwrittenAnswers, gradeQuestion } from "@/lib/openrouter";
+import { gradeQuestion } from "@/lib/openrouter";
+import { extractHandwrittenAnswers } from "@/lib/reducto";
 import { gradeMcqExact } from "@/lib/mcq";
 import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import type { OnboardingAnswerKey, OnboardingQuestionGrade } from "@/lib/onboarding/types";
 import type { SampleGradeResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
-
+export const maxDuration = 90;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;

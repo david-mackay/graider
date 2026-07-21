@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { questionBank, testQuestions, tests } from "@/drizzle/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { parseTestFromStackImages } from "@/lib/openrouter";
+import { parseTestFromStackImages } from "@/lib/reducto";
 import { normalizeQuestion } from "@/lib/stack-grading";
 import type { OcrPage, ParsedImportQuestion, StackTestDiscovery } from "@/lib/types";
 

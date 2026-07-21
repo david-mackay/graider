@@ -9,7 +9,7 @@ import {
   tests,
 } from "@/drizzle/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { extractHandwrittenStack } from "@/lib/openrouter";
+import { extractHandwrittenStack } from "@/lib/reducto";
 import { gradeOneAttempt } from "@/lib/grading";
 import {
   OcrAnswer,
