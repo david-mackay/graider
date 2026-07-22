@@ -11,7 +11,30 @@ export type GradeAttemptResult = {
   grades: Array<{ question_id: string; marks_earned: number; feedback: string }>;
 };
 
+export class AttemptNotSubmittedError extends Error {
+  constructor() {
+    super("This attempt is still in progress and cannot be graded yet.");
+    this.name = "AttemptNotSubmittedError";
+  }
+}
+
 export async function gradeOneAttempt(attemptId: string, testId: string): Promise<GradeAttemptResult> {
+  const [attempt] = await db
+    .select({
+      id: testAttempts.id,
+      submittedAt: testAttempts.submittedAt,
+    })
+    .from(testAttempts)
+    .where(eq(testAttempts.id, attemptId))
+    .limit(1);
+
+  if (!attempt) {
+    throw new Error("Attempt not found.");
+  }
+  if (!attempt.submittedAt) {
+    throw new AttemptNotSubmittedError();
+  }
+
   const tqRows = await db
     .select({
       questionId: testQuestions.questionId,

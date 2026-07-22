@@ -43,7 +43,21 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existing) {
-      if (existing.status === "draft") {
+      // Unfinished = never submitted. Status may be "graded" if a teacher
+      // accidentally AI-graded mid-attempt — still let the student continue.
+      if (!existing.submittedAt) {
+        if (existing.status !== "draft") {
+          await db
+            .update(testAttempts)
+            .set({
+              status: "draft",
+              totalMarks: null,
+              maxMarks: null,
+              gradedAt: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(testAttempts.id, existing.id));
+        }
         const check = canSubmitAttempt(test, existing.startedAt);
         if (!check.ok) {
           return NextResponse.json({ error: check.reason }, { status: 403 });
@@ -51,7 +65,7 @@ export async function POST(request: NextRequest) {
         const deadline = getAttemptDeadline(test, existing.startedAt);
         return NextResponse.json({
           attempt_id: existing.id,
-          status: existing.status,
+          status: "draft",
           started_at: existing.startedAt?.toISOString() ?? null,
           deadline_at: deadline?.toISOString() ?? null,
           duration_minutes: test.durationMinutes,

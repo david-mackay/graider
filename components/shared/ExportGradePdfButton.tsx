@@ -5,7 +5,8 @@ import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import type { GradedAttemptDetail } from "@/lib/dashboard-types";
 import {
   generateAttemptPdf,
-  openHtmlPreview,
+  openPdfPreview,
+  openPrintPreview,
   buildGradeHtml,
   sharePdfBlob,
   type GradePdfOptions,
@@ -89,9 +90,13 @@ export default function ExportGradePdfButton({
   }
 
   function handleOpenPreview() {
-    if (!previewAttempt) return;
     try {
-      openHtmlPreview(
+      if (pdfUrl) {
+        openPdfPreview(pdfUrl);
+        return;
+      }
+      if (!previewAttempt) return;
+      openPrintPreview(
         buildGradeHtml(previewAttempt, { includeGrade, includeFeedback, studentName }),
       );
     } catch (err) {
@@ -263,7 +268,7 @@ export default function ExportGradePdfButton({
                     onClick={handleOpenPreview}
                     className={`${btnSecondary} justify-center py-3`}
                   >
-                    Open full preview
+                    Open PDF / print
                   </button>
                   <button
                     type="button"

@@ -3,7 +3,7 @@ import { getCurrentUser, requireRole } from "@/lib/auth";
 import { assertCanCreateClass, SubscriptionLimitError } from "@/lib/subscriptions/limits";
 import { db } from "@/lib/db";
 import { classes, classMemberships } from "@/drizzle/schema";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { type SchoolClass } from "@/lib/types";
 
@@ -47,10 +47,31 @@ export async function GET() {
       membershipByClass.set(row.classId, row.role as "teacher" | "student");
     }
 
+    const studentCounts = await db
+      .select({
+        classId: classMemberships.classId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(classMemberships)
+      .where(
+        and(
+          inArray(classMemberships.classId, classIds),
+          eq(classMemberships.role, "student"),
+          eq(classMemberships.status, "active"),
+        ),
+      )
+      .groupBy(classMemberships.classId);
+
+    const studentCountByClass = new Map<string, number>();
+    for (const row of studentCounts) {
+      studentCountByClass.set(row.classId, Number(row.count) || 0);
+    }
+
     const result = classRows.map((row) => ({
       ...row,
       created_at: row.created_at?.toISOString() ?? null,
       role_in_class: membershipByClass.get(row.id),
+      student_count: studentCountByClass.get(row.id) ?? 0,
     }));
 
     return NextResponse.json({ classes: result });
@@ -90,7 +111,7 @@ export async function POST(request: NextRequest) {
       status: "active",
     });
 
-    const result: SchoolClass & { role_in_class: string } = {
+    const result: SchoolClass & { role_in_class: string; student_count: number } = {
       id: classRow.id,
       name: classRow.name,
       owner_user_id: classRow.ownerUserId,
@@ -98,6 +119,7 @@ export async function POST(request: NextRequest) {
       created_at: classRow.createdAt?.toISOString() ?? null,
       updated_at: classRow.updatedAt?.toISOString() ?? null,
       role_in_class: "teacher",
+      student_count: 0,
     };
 
     return NextResponse.json({ class: result }, { status: 201 });

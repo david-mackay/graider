@@ -89,20 +89,24 @@ export async function GET() {
 
     const normalized = attempts.map((attempt) => {
       const released = testReleasedMap.get(attempt.testId) ?? false;
-      const hideGrade = isStudent && attempt.status === "graded" && !released;
+      // Never treat as finished until the student actually submitted.
+      // Premature AI grade can flip status to "graded" while still in progress.
+      const unfinished = !attempt.submittedAt;
+      const effectiveStatus = unfinished ? "draft" : attempt.status;
+      const hideGrade = isStudent && effectiveStatus === "graded" && !released;
       return {
         id: attempt.id,
         test_id: attempt.testId,
         student_id: attempt.studentId,
         student_name: isStudent ? null : (studentNameById.get(attempt.studentId) ?? null),
         source: attempt.source,
-        status: hideGrade ? "submitted" : attempt.status,
-        total_marks: hideGrade ? null : attempt.totalMarks,
-        max_marks: hideGrade ? null : attempt.maxMarks,
+        status: hideGrade ? "submitted" : effectiveStatus,
+        total_marks: unfinished || hideGrade ? null : attempt.totalMarks,
+        max_marks: unfinished || hideGrade ? null : attempt.maxMarks,
         started_at: attempt.startedAt?.toISOString() ?? null,
         submitted_at: attempt.submittedAt?.toISOString() ?? null,
         timed_out_at: attempt.timedOutAt?.toISOString() ?? null,
-        graded_at: hideGrade ? null : (attempt.gradedAt?.toISOString() ?? null),
+        graded_at: unfinished || hideGrade ? null : (attempt.gradedAt?.toISOString() ?? null),
         ocr_uploads: attempt.ocrUploads,
         test_title: testTitleMap.get(attempt.testId) ?? "Unknown test",
       };
@@ -160,7 +164,9 @@ export async function POST(request: NextRequest) {
       .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, student.id)))
       .limit(1);
 
-    if (attempt && attempt.status !== "draft") {
+    // Only block a second submit after a real submission. Status alone is not
+    // enough — a teacher may have AI-graded a still-in-progress attempt.
+    if (attempt?.submittedAt) {
       return NextResponse.json(
         { error: "You have already submitted this test.", attempt_id: attempt.id },
         { status: 409 },
@@ -227,6 +233,10 @@ export async function POST(request: NextRequest) {
           status: "submitted",
           submittedAt: now,
           timedOutAt: timedOut ? now : null,
+          // Clear any premature grade so the teacher regrades the real answers.
+          totalMarks: null,
+          maxMarks: null,
+          gradedAt: null,
           updatedAt: now,
         })
         .where(eq(testAttempts.id, attempt.id));

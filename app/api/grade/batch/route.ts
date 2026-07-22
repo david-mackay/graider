@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { testAttempts, tests } from "@/drizzle/schema";
-import { eq, and } from "drizzle-orm";
-import { gradeOneAttempt } from "@/lib/grading";
+import { eq, and, isNotNull } from "drizzle-orm";
+import { AttemptNotSubmittedError, gradeOneAttempt } from "@/lib/grading";
 
 type BatchPayload = {
   testId?: string;
@@ -33,7 +33,13 @@ export async function POST(request: NextRequest) {
     const submitted = await db
       .select({ id: testAttempts.id })
       .from(testAttempts)
-      .where(and(eq(testAttempts.testId, testId), eq(testAttempts.status, "submitted")));
+      .where(
+        and(
+          eq(testAttempts.testId, testId),
+          eq(testAttempts.status, "submitted"),
+          isNotNull(testAttempts.submittedAt),
+        ),
+      );
 
     if (submitted.length === 0) {
       return NextResponse.json({ graded_count: 0, results: [] });
@@ -42,12 +48,17 @@ export async function POST(request: NextRequest) {
     const results: Array<{ attempt_id: string; total_marks: number; max_marks: number }> = [];
 
     for (const attempt of submitted) {
-      const result = await gradeOneAttempt(attempt.id, testId);
-      results.push({
-        attempt_id: result.attempt_id,
-        total_marks: result.total_marks,
-        max_marks: result.max_marks,
-      });
+      try {
+        const result = await gradeOneAttempt(attempt.id, testId);
+        results.push({
+          attempt_id: result.attempt_id,
+          total_marks: result.total_marks,
+          max_marks: result.max_marks,
+        });
+      } catch (error) {
+        if (error instanceof AttemptNotSubmittedError) continue;
+        throw error;
+      }
     }
 
     return NextResponse.json({ graded_count: results.length, results });

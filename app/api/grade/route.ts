@@ -3,7 +3,7 @@ import { requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { testAttempts, tests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { gradeOneAttempt } from "@/lib/grading";
+import { AttemptNotSubmittedError, gradeOneAttempt } from "@/lib/grading";
 
 type GradePayload = {
   attemptId?: string;
@@ -19,13 +19,24 @@ export async function POST(request: NextRequest) {
     }
 
     const [attempt] = await db
-      .select({ id: testAttempts.id, testId: testAttempts.testId })
+      .select({
+        id: testAttempts.id,
+        testId: testAttempts.testId,
+        submittedAt: testAttempts.submittedAt,
+      })
       .from(testAttempts)
       .where(eq(testAttempts.id, attemptId))
       .limit(1);
 
     if (!attempt) {
       return NextResponse.json({ error: "Attempt not found." }, { status: 404 });
+    }
+
+    if (!attempt.submittedAt) {
+      return NextResponse.json(
+        { error: "This attempt is still in progress and cannot be graded yet." },
+        { status: 409 },
+      );
     }
 
     const [test] = await db
@@ -49,6 +60,9 @@ export async function POST(request: NextRequest) {
       grades: result.grades,
     });
   } catch (error) {
+    if (error instanceof AttemptNotSubmittedError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     const message = error instanceof Error ? error.message : "Unexpected error";
     const status = message === "UNAUTHORIZED" ? 401 : message === "FORBIDDEN" ? 403 : 500;
     return NextResponse.json({ error: message }, { status });

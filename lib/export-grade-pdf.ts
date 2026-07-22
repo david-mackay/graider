@@ -278,10 +278,34 @@ export async function sharePdfBlob(blob: Blob, filename: string): Promise<"share
   return "downloaded";
 }
 
-export function openHtmlPreview(html: string) {
-  const win = window.open("", "_blank", "noopener,noreferrer");
-  if (!win) throw new Error("Could not open PDF preview. Allow pop-ups and try again.");
+/** Open the generated PDF in a new tab (browser PDF viewer / print-ready). */
+export function openPdfPreview(url: string) {
+  const win = window.open(url, "_blank");
+  if (!win) {
+    throw new Error("Could not open PDF preview. Allow pop-ups and try again.");
+  }
+  win.focus();
+}
+
+/**
+ * Open an HTML print preview and trigger the browser print dialog
+ * (Save as PDF / print). Avoids noopener so document.write works.
+ */
+export function openPrintPreview(html: string) {
+  const win = window.open("about:blank", "_blank");
+  if (!win) {
+    throw new Error("Could not open PDF preview. Allow pop-ups and try again.");
+  }
   win.document.open();
   win.document.write(html);
   win.document.close();
+  // Give the document a moment to layout before print.
+  win.focus();
+  window.setTimeout(() => {
+    try {
+      win.print();
+    } catch {
+      // Print can fail in some browsers; the preview tab still remains usable.
+    }
+  }, 250);
 }

@@ -40,6 +40,7 @@ export type GradedAttemptDetail = {
 
 export type DashboardClass = SchoolClass & {
   role_in_class?: "teacher" | "student";
+  student_count?: number;
 };
 
 export type ClassMember = {

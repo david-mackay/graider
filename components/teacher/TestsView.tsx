@@ -608,14 +608,16 @@ export default function TestsView({
                         ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          className={btnPrimary}
-                          type="button"
-                          onClick={() => void gradeAttempt(attempt.id)}
-                          disabled={isBusy}
-                        >
-                          {isBusy ? "Grading…" : "AI Grade"}
-                        </button>
+                        {attempt.status === "submitted" || attempt.status === "graded" ? (
+                          <button
+                            className={btnPrimary}
+                            type="button"
+                            onClick={() => void gradeAttempt(attempt.id)}
+                            disabled={isBusy}
+                          >
+                            {isBusy ? "Grading…" : "AI Grade"}
+                          </button>
+                        ) : null}
                         {attempt.status === "graded" ? (
                           <button className={btnSecondary} type="button" onClick={() => void openAttemptDetail(attempt.id)}>
                             View result

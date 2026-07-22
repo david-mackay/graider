@@ -222,6 +222,9 @@ export default function TeacherClassesView({
                       </div>
                     )}
                     <p className="mt-1 text-xs text-ink-faint">
+                      {entry.student_count ?? 0} student
+                      {(entry.student_count ?? 0) !== 1 ? "s" : ""}
+                      {" · "}
                       {classTests.length} test{classTests.length !== 1 ? "s" : ""}
                       {gradedCount > 0 ? ` · ${gradedCount} graded` : ""}
                     </p>
