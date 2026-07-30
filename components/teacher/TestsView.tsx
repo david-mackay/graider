@@ -5,9 +5,9 @@ import { Badge, Card, FormField, SectionHeader, btnPrimary, btnSecondary, inputC
 import { IconClipboard, IconCheck, IconPen, IconX } from "@/components/shared/icons";
 import PdfImportPanel from "@/components/shared/PdfImportPanel";
 import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
-import ExportGradePdfButton from "@/components/shared/ExportGradePdfButton";
 import TestAdministerPanel from "@/components/teacher/TestAdministerPanel";
 import TestViewEditor from "@/components/teacher/TestViewEditor";
+import AttemptGradeEditor from "@/components/teacher/AttemptGradeEditor";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
 import {
   defaultPresetForSurface,
@@ -470,86 +470,16 @@ export default function TestsView({
       ) : null}
 
       {selectedAttemptDetail ? (
-        <Card className="border-line">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-ink">{selectedAttemptDetail.test_title}</h3>
-                <Badge
-                  variant={
-                    selectedAttemptDetail.status === "graded"
-                      ? "green"
-                      : selectedAttemptDetail.status === "submitted"
-                        ? "blue"
-                        : "gray"
-                  }
-                >
-                  {selectedAttemptDetail.status}
-                </Badge>
-              </div>
-              <p className="mt-0.5 text-xs text-ink-faint">
-                Student: {studentLabel(selectedAttemptDetail.student_id)}
-              </p>
-              {selectedAttemptDetail.status === "graded" ? (
-                <p className="mt-2 font-hand -rotate-2 text-3xl font-bold text-pen">
-                  {selectedAttemptDetail.total_marks}/{selectedAttemptDetail.max_marks}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-marigold-deep">Not yet graded.</p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {selectedAttemptDetail.status === "graded" ? (
-                <ExportGradePdfButton
-                  attempt={selectedAttemptDetail}
-                  studentName={studentLabel(selectedAttemptDetail.student_id)}
-                  label="Share PDF"
-                  compact
-                />
-              ) : null}
-              <button type="button" className={btnSecondary} onClick={() => setSelectedAttemptDetail(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-          <div className="mt-4 space-y-3 border-t border-line-soft pt-4">
-            <p className="text-sm font-semibold text-ink">Question breakdown</p>
-            {selectedAttemptDetail.questions.map((question, index) => (
-              <div key={question.question_id} className="rounded-lg border border-line-soft bg-cream p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-ink-faint">
-                    Q{index + 1} · {question.marks} mark{question.marks !== 1 ? "s" : ""}
-                  </p>
-                  {question.marks_earned != null ? (
-                    <span
-                      className={`text-sm font-bold ${
-                        question.marks_earned === question.marks
-                          ? "text-moss"
-                          : question.marks_earned > 0
-                            ? "text-marigold"
-                            : "text-pen"
-                      }`}
-                    >
-                      {question.marks_earned}/{question.marks}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-ink-faint">—</span>
-                  )}
-                </div>
-                <p className="mt-1.5 text-sm font-medium text-ink">{question.prompt}</p>
-                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Student answer</p>
-                <pre className="mt-1 whitespace-pre-wrap rounded-md border border-line-soft bg-paper px-3 py-2 text-xs leading-relaxed text-ink-soft">
-                  {question.student_answer || "No answer provided."}
-                </pre>
-                {question.feedback ? (
-                  <p className="mt-3 border-l-2 border-pen-soft pl-3 font-hand text-lg leading-snug text-pen-deep">
-                    {question.feedback}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </Card>
+        <AttemptGradeEditor
+          attempt={selectedAttemptDetail}
+          onClose={() => setSelectedAttemptDetail(null)}
+          onSaved={async (totalMarks, maxMarks) => {
+            setSelectedAttemptDetail((prev) =>
+              prev ? { ...prev, total_marks: totalMarks, max_marks: maxMarks, status: "graded" } : prev,
+            );
+            await onChanged();
+          }}
+        />
       ) : null}
 
       {testsInScope.length > 0 ? (
@@ -619,8 +549,8 @@ export default function TestsView({
                           </button>
                         ) : null}
                         {attempt.status === "graded" ? (
-                          <button className={btnSecondary} type="button" onClick={() => void openAttemptDetail(attempt.id)}>
-                            View result
+                          <button className={btnPrimary} type="button" onClick={() => void openAttemptDetail(attempt.id)}>
+                            Edit grades
                           </button>
                         ) : null}
                       </div>

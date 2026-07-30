@@ -3,13 +3,14 @@ import { requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   attemptAnswers,
-  classMemberships,
   questionBank,
   testAttempts,
   testQuestions,
   tests,
 } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { gradeQuestion } from "@/lib/openrouter";
+import { gradeMcqExact } from "@/lib/mcq";
 
 type RouteContext = { params: Promise<{ attemptId: string; questionId: string }> };
 
@@ -21,20 +22,22 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const marksRaw = body.marksEarned;
     const feedbackRaw = body.feedback;
+    const studentAnswerRaw = body.studentAnswer;
 
-    if (typeof marksRaw !== "number" || !Number.isFinite(marksRaw)) {
-      return NextResponse.json({ error: "marksEarned must be a number." }, { status: 400 });
-    }
-    if (typeof feedbackRaw !== "string") {
-      return NextResponse.json({ error: "feedback must be a string." }, { status: 400 });
+    // studentAnswer is optional — when provided we re-grade, otherwise we just patch marks/feedback
+    const regradeMode = typeof studentAnswerRaw === "string";
+
+    if (!regradeMode) {
+      if (typeof marksRaw !== "number" || !Number.isFinite(marksRaw)) {
+        return NextResponse.json({ error: "marksEarned must be a number." }, { status: 400 });
+      }
+      if (typeof feedbackRaw !== "string") {
+        return NextResponse.json({ error: "feedback must be a string." }, { status: 400 });
+      }
     }
 
     const [attempt] = await db
-      .select({
-        id: testAttempts.id,
-        testId: testAttempts.testId,
-        studentId: testAttempts.studentId,
-      })
+      .select({ id: testAttempts.id, testId: testAttempts.testId })
       .from(testAttempts)
       .where(eq(testAttempts.id, attemptId))
       .limit(1);
@@ -56,7 +59,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     await requireClassAccess(test.classId, ["teacher"]);
 
     const [questionLink] = await db
-      .select({ marks: questionBank.marks })
+      .select({
+        marks: questionBank.marks,
+        correctAnswer: questionBank.correctAnswer,
+        prompt: questionBank.prompt,
+        questionType: questionBank.questionType,
+      })
       .from(testQuestions)
       .innerJoin(questionBank, eq(testQuestions.questionId, questionBank.id))
       .where(and(eq(testQuestions.testId, attempt.testId), eq(testQuestions.questionId, questionId)))
@@ -67,20 +75,47 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const maxMarks = questionLink.marks ?? 0;
-    const marksEarned = Math.max(0, Math.min(maxMarks, Math.round(marksRaw)));
-    const feedback = feedbackRaw.trim() || "Teacher adjusted this grade.";
+
+    let marksEarned: number;
+    let feedback: string;
+    const patch: Record<string, unknown> = { gradedBy: "teacher", updatedAt: new Date() };
+
+    if (regradeMode) {
+      const newAnswer = (studentAnswerRaw as string).trim();
+      patch.studentAnswer = newAnswer;
+
+      const grade =
+        questionLink.questionType === "mcq"
+          ? gradeMcqExact({
+              teacherAnswer: questionLink.correctAnswer,
+              studentAnswer: newAnswer,
+              marks: maxMarks,
+            })
+          : await gradeQuestion({
+              question: questionLink.prompt,
+              marks: maxMarks,
+              teacher_answer: questionLink.correctAnswer,
+              student_answer: newAnswer,
+            });
+
+      marksEarned = grade.marks_earned;
+      feedback = grade.feedback;
+      patch.marksEarned = marksEarned;
+      patch.feedback = feedback;
+    } else {
+      marksEarned = Math.max(0, Math.min(maxMarks, Math.round(marksRaw as number)));
+      feedback = (feedbackRaw as string).trim() || "Teacher adjusted this grade.";
+      patch.marksEarned = marksEarned;
+      patch.feedback = feedback;
+    }
 
     const [updated] = await db
       .update(attemptAnswers)
-      .set({
-        marksEarned,
-        feedback,
-        gradedBy: "teacher",
-        updatedAt: new Date(),
-      })
+      .set(patch)
       .where(and(eq(attemptAnswers.attemptId, attemptId), eq(attemptAnswers.questionId, questionId)))
       .returning({
         id: attemptAnswers.id,
+        studentAnswer: attemptAnswers.studentAnswer,
         marksEarned: attemptAnswers.marksEarned,
         feedback: attemptAnswers.feedback,
         gradedBy: attemptAnswers.gradedBy,
@@ -121,10 +156,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({
       answer: {
         question_id: questionId,
+        student_answer: updated.studentAnswer,
         marks_earned: updated.marksEarned,
         feedback: updated.feedback,
         updated_at: updated.updatedAt?.toISOString() ?? null,
-        graded_by: "teacher",
+        graded_by: updated.gradedBy,
       },
       attempt: {
         total_marks: Number(totals?.total ?? 0),

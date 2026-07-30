@@ -18,6 +18,7 @@ export type GradedAttemptQuestion = {
   question_id: string;
   prompt: string;
   student_answer: string;
+  correct_answer: string | null;
   marks: number;
   marks_earned: number | null;
   feedback: string | null;

@@ -12,6 +12,7 @@ import {
   inputClass,
 } from "@/components/shared/ui";
 import { IconCheck, IconCopy, IconPen, IconUsers, IconX } from "@/components/shared/icons";
+import StudentProfilePanel from "@/components/teacher/StudentProfilePanel";
 import { handleJson, type StatusType } from "@/lib/dashboard-client";
 import type { ClassMember, DashboardAttempt, Invitation } from "@/lib/dashboard-types";
 
@@ -55,6 +56,7 @@ export default function StudentsView({
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [copiedId, setCopiedId] = useState("");
+  const [profileStudent, setProfileStudent] = useState<ClassMember | null>(null);
 
   useEffect(() => {
     if (classId) void onLoadInvites();
@@ -429,6 +431,15 @@ export default function StudentsView({
         </Card>
       ) : null}
 
+      {profileStudent ? (
+        <StudentProfilePanel
+          student={profileStudent}
+          attempts={attemptsInScope}
+          onClose={() => setProfileStudent(null)}
+          onChanged={onChanged}
+        />
+      ) : null}
+
       {teachers.length > 0 ? (
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">Teachers</h3>
@@ -521,6 +532,13 @@ export default function StudentsView({
                         </p>
                       ) : null}
                     </div>
+                    <button
+                      type="button"
+                      className="cursor-pointer rounded-full border border-line bg-paper px-3 py-1 text-xs font-semibold text-pen hover:bg-cream transition-colors duration-150"
+                      onClick={() => setProfileStudent(member)}
+                    >
+                      View grades
+                    </button>
                     <button
                       type="button"
                       className="rounded-lg p-1.5 text-ink-faint hover:bg-cream hover:text-pen-deep"

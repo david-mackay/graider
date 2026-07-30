@@ -11,6 +11,7 @@ type AttemptQuestionDetail = {
   question_id: string;
   prompt: string;
   student_answer: string;
+  correct_answer: string | null;
   marks: number;
   marks_earned: number | null;
   feedback: string | null;
@@ -86,6 +87,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
         sortOrder: testQuestions.sortOrder,
         prompt: questionBank.prompt,
         marks: questionBank.marks,
+        correctAnswer: questionBank.correctAnswer,
       })
       .from(testQuestions)
       .innerJoin(questionBank, eq(testQuestions.questionId, questionBank.id))
@@ -124,6 +126,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
         question_id: question.questionId,
         prompt: question.prompt ?? "Question unavailable.",
         student_answer: answer?.studentAnswer ?? "",
+        correct_answer: isTeacher ? (question.correctAnswer ?? null) : null,
         marks: question.marks ?? 0,
         marks_earned: answer?.marksEarned ?? null,
         feedback: stripFeedback ? null : (answer?.feedback ?? null),
