@@ -148,11 +148,13 @@ export default function GradeWizard() {
     preview: studentPreview,
     results: studentResults,
     pageToStudentId,
+    reviewImageFiles,
     gradingPhase,
     activeJob,
     studentProgress,
     errorMessage: studentError,
     isBusy: studentBusy,
+    readyCount,
     parsePreset: studentParsePreset,
     actions: studentActions,
   } = studentWizard;
@@ -180,17 +182,14 @@ export default function GradeWizard() {
     };
   }, [stackPageImageUrls]);
 
-  // For student-first: build image URLs from the buckets in original page order.
+  // For student-first: image URLs follow the merged ready-preview order.
   const studentPageImageUrls = useMemo(() => {
-    const captured = buckets.filter((b) => b.pages.length > 0);
-    const urls: string[] = [];
-    for (const bucket of captured) {
-      for (const file of bucket.pages) {
-        urls.push(URL.createObjectURL(file));
-      }
-    }
-    return urls;
-  }, [buckets]);
+    return reviewImageFiles.map((file) => URL.createObjectURL(file));
+  }, [reviewImageFiles]);
+  const studentPageMimeTypes = useMemo(
+    () => reviewImageFiles.map((file) => file.type || null),
+    [reviewImageFiles],
+  );
   useEffect(() => {
     return () => {
       for (const url of studentPageImageUrls) URL.revokeObjectURL(url);
@@ -243,7 +242,7 @@ export default function GradeWizard() {
         title="Grade papers"
         subtitle={
           activeIsStudent
-            ? "Pick a student, add photos of their pages, then grade the whole session in one pass."
+            ? "Pick a student, add their pages, and send each one — then review and grade."
             : "Upload photos of a mixed stack; we'll read each page, match it to a student, and grade in one pass."
         }
       />
@@ -353,8 +352,12 @@ export default function GradeWizard() {
               studentName={activeStudent.studentName}
               initialPages={activeStudent.pages}
               pageCount={activeStudent.pages.length}
+              sendStatus={activeStudent.sendStatus}
+              sendError={activeStudent.sendError}
               onFilesChange={studentActions.setActivePages}
-              onDone={studentActions.finishActiveStudent}
+              onSend={() => void studentActions.sendStudent(activeStudent.studentId)}
+              onCancelSend={() => void studentActions.cancelSend(activeStudent.studentId)}
+              onSaveForLater={studentActions.finishActiveStudent}
               onBack={studentActions.back}
               errorMessage={studentError}
             />
@@ -369,9 +372,12 @@ export default function GradeWizard() {
               onAddStudent={studentActions.startAddStudent}
               onResumeStudent={studentActions.resumeStudent}
               onRemoveStudent={studentActions.removeBucket}
-              onGradeAll={() => void studentActions.submitSession()}
+              onSendStudent={(studentId) => void studentActions.sendStudent(studentId)}
+              onCancelSend={(studentId) => void studentActions.cancelSend(studentId)}
+              onReview={studentActions.openReview}
               onBack={studentActions.back}
               isBusy={studentBusy}
+              readyCount={readyCount}
               errorMessage={studentError}
             />
           ) : null}
@@ -391,6 +397,7 @@ export default function GradeWizard() {
               pages={studentPreview.pages}
               pageToStudentId={pageToStudentId}
               pageImageUrls={studentPageImageUrls}
+              pageMimeTypes={studentPageMimeTypes}
               roster={roster}
               onOcrAnswersChange={studentActions.setOcrAnswers}
               onConfirm={() => void studentActions.confirmAll()}

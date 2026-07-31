@@ -5,7 +5,16 @@ import { tests } from "@/drizzle/schema";
 import type { GradeStackCommitPayload } from "@/lib/types";
 import { eq } from "drizzle-orm";
 
-/** Notify the teacher when a grade-stack job reaches a terminal or actionable state. */
+/**
+ * Notify the teacher only when there is something useful to open in the app.
+ *
+ * Sends for:
+ * - preview `needs_review` → review OCR / confirm grading
+ * - commit `completed` → view results
+ *
+ * Does not send for failures/cancellations — those are already visible in the
+ * active web/mobile session, and opening a dead job from a cold app is noise.
+ */
 export async function notifyGradeStackJobUpdate(jobId: string): Promise<void> {
   const row = await findJobById(jobId);
   if (!row) return;
@@ -41,20 +50,6 @@ export async function notifyGradeStackJobUpdate(jobId: string): Promise<void> {
           : `${testTitle}: grading finished.`,
       data: {
         type: "grade_stack_commit",
-        jobId: row.id,
-        screen: "grade",
-      },
-    });
-    return;
-  }
-
-  if (row.status === "failed") {
-    const detail = row.error?.trim();
-    await sendPushToUser(row.teacherId, {
-      title: "Grading failed",
-      body: detail ? detail.slice(0, 160) : `${testTitle}: open Graider to try again.`,
-      data: {
-        type: "grade_stack_failed",
         jobId: row.id,
         screen: "grade",
       },

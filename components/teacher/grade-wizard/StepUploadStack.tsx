@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import PageStagingGrid from "@/components/shared/PageStagingGrid";
 import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
+import CopyableError from "@/components/shared/CopyableError";
 import {
   defaultPresetForSurface,
   type DocumentParsePreset,
@@ -78,14 +79,7 @@ export default function StepUploadStack({
           onError={setLocalError}
         />
 
-        {combinedError ? (
-          <div
-            role="alert"
-            className="mt-3 rounded-xl border border-pen-soft/60 bg-pen-wash px-3.5 py-2.5 text-sm font-bold text-pen-deep"
-          >
-            {combinedError}
-          </div>
-        ) : null}
+        {combinedError ? <CopyableError message={combinedError} className="mt-3" /> : null}
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

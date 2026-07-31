@@ -186,6 +186,36 @@ function guessMime(filename: string): string {
   return "application/octet-stream";
 }
 
+async function parseFileToJobId(
+  client: Reducto,
+  fileId: string,
+  preset: DocumentParsePreset,
+): Promise<string> {
+  const mapping = mapPresetToReducto(preset);
+  const parsed = await client.parse.run({
+    input: fileId,
+    enhance: {
+      agentic: mapping.agenticText ? [{ scope: "text" as const }] : [],
+      intelligent_ordering: mapping.intelligentOrdering,
+    },
+    settings: {
+      extraction_mode: "hybrid",
+      ocr_system: "standard",
+    },
+  });
+  const jobId =
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "job_id" in parsed &&
+    typeof (parsed as { job_id?: unknown }).job_id === "string"
+      ? (parsed as { job_id: string }).job_id
+      : null;
+  if (!jobId) {
+    throw new Error("Document parse did not return a job id.");
+  }
+  return `jobid://${jobId}`;
+}
+
 async function extractWithSchema(params: {
   fileIds: string[];
   schema: unknown;
@@ -193,9 +223,19 @@ async function extractWithSchema(params: {
   preset: DocumentParsePreset;
 }): Promise<Record<string, unknown>> {
   const client = getClient();
-  const input = params.fileIds.length === 1 ? params.fileIds[0] : params.fileIds;
   const mapping = mapPresetToReducto(params.preset);
   const systemPrompt = `${params.systemPrompt} ${mapping.promptSuffix}`.trim();
+
+  // Multi-doc extract only accepts jobid:// references (not raw upload file ids).
+  let input: string | string[];
+  if (params.fileIds.length === 1) {
+    input = params.fileIds[0];
+  } else {
+    input = [];
+    for (const fileId of params.fileIds) {
+      input.push(await parseFileToJobId(client, fileId, params.preset));
+    }
+  }
 
   const response = await client.extract.run({
     input,
@@ -203,16 +243,21 @@ async function extractWithSchema(params: {
       schema: params.schema,
       system_prompt: systemPrompt,
     },
-    parsing: {
-      enhance: {
-        agentic: mapping.agenticText ? [{ scope: "text" as const }] : [],
-        intelligent_ordering: mapping.intelligentOrdering,
-      },
-      settings: {
-        extraction_mode: "hybrid",
-        ocr_system: "standard",
-      },
-    },
+    // parsing is ignored when input is jobid://; keep for single-file uploads.
+    ...(typeof input === "string" && !input.startsWith("jobid://")
+      ? {
+          parsing: {
+            enhance: {
+              agentic: mapping.agenticText ? [{ scope: "text" as const }] : [],
+              intelligent_ordering: mapping.intelligentOrdering,
+            },
+            settings: {
+              extraction_mode: "hybrid" as const,
+              ocr_system: "standard" as const,
+            },
+          },
+        }
+      : {}),
     settings: {
       array_extract: true,
       include_images: mapping.includeImages,

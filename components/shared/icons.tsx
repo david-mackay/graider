@@ -112,3 +112,23 @@ export function IconSparkle({ className }: IconProps) {
     </svg>
   );
 }
+
+export function IconSend({ className }: IconProps) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5"
+      />
+    </svg>
+  );
+}
+
+export function IconStopSquare({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="7" y="7" width="10" height="10" rx="1.5" />
+    </svg>
+  );
+}

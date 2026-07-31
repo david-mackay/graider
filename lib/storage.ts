@@ -26,8 +26,12 @@ function getSupabase(): SupabaseClient | null {
   });
 }
 
-function usesObjectStorage(): boolean {
+export function usesObjectStorage(): boolean {
   return Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+}
+
+export function getStorageBucket(): string {
+  return getBucket();
 }
 
 export async function uploadFile(
@@ -52,6 +56,59 @@ export async function uploadFile(
   const fullPath = path.join(UPLOAD_DIR, key);
   await fs.mkdir(path.dirname(fullPath), { recursive: true });
   await fs.writeFile(fullPath, buffer);
+}
+
+export type SignedUploadTarget = {
+  path: string;
+  token: string;
+  signedUrl: string;
+  bucket: string;
+};
+
+/** Short-lived signed upload URL for direct browser → Supabase uploads. */
+export async function createSignedUpload(filePath: string): Promise<SignedUploadTarget> {
+  const key = normalizeKey(filePath);
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error("Object storage is not configured.");
+  }
+
+  const bucket = getBucket();
+  const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(key, {
+    upsert: true,
+  });
+  if (error || !data) {
+    throw new Error(`Failed to create signed upload URL: ${error?.message ?? "unknown error"}`);
+  }
+
+  return {
+    path: data.path || key,
+    token: data.token,
+    signedUrl: data.signedUrl,
+    bucket,
+  };
+}
+
+export async function objectExists(filePath: string): Promise<boolean> {
+  const key = normalizeKey(filePath);
+  const supabase = getSupabase();
+
+  if (supabase) {
+    const dir = path.posix.dirname(key);
+    const name = path.posix.basename(key);
+    const { data, error } = await supabase.storage.from(getBucket()).list(dir === "." ? "" : dir, {
+      limit: 1000,
+    });
+    if (error) return false;
+    return (data ?? []).some((entry) => entry.name === name);
+  }
+
+  try {
+    await fs.access(path.join(UPLOAD_DIR, key));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function getFilePath(filePath: string): Promise<string> {

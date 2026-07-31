@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Card, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
 import { IconX } from "@/components/shared/icons";
+import CopyableError from "@/components/shared/CopyableError";
 import {
   duplicateNameCounts,
   rosterDisplayLabel,
@@ -20,6 +21,8 @@ type StepStudentReviewProps = {
   pageToStudentId: Map<number, string>;
   /** Object URLs for the pages the teacher just uploaded (indexed by pageIndex). */
   pageImageUrls?: string[];
+  /** Parallel to pageImageUrls — used for PDF placeholders. */
+  pageMimeTypes?: (string | null)[];
   roster: RosterEntry[];
   onOcrAnswersChange: (pageIndex: number, answers: OcrAnswer[]) => void;
   onConfirm: () => void;
@@ -46,6 +49,7 @@ export default function StepStudentReview({
   pages,
   pageToStudentId,
   pageImageUrls,
+  pageMimeTypes,
   roster,
   onOcrAnswersChange,
   onConfirm,
@@ -55,7 +59,11 @@ export default function StepStudentReview({
 }: StepStudentReviewProps) {
   const nameCounts = useMemo(() => duplicateNameCounts(roster), [roster]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [lightbox, setLightbox] = useState<{ url: string; page: number } | null>(null);
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    page: number;
+    isPdf: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!lightbox) return;
@@ -140,11 +148,7 @@ export default function StepStudentReview({
         </Card>
       ) : null}
 
-      {errorMessage ? (
-        <Card className="border-pen-soft/60 bg-pen-wash">
-          <p className="text-sm font-bold text-pen-deep">{errorMessage}</p>
-        </Card>
-      ) : null}
+      {errorMessage ? <CopyableError message={errorMessage} /> : null}
 
       <ul className="space-y-3">
         {groups.map((group) => {
@@ -180,6 +184,10 @@ export default function StepStudentReview({
                         pageImageUrls && pageImageUrls[page.pageIndex]
                           ? pageImageUrls[page.pageIndex]
                           : null;
+                      const mime = pageMimeTypes?.[page.pageIndex] ?? null;
+                      const isPdf =
+                        mime === "application/pdf" ||
+                        (typeof mime === "string" && mime.includes("pdf"));
                       return (
                         <div
                           key={page.pageIndex}
@@ -194,17 +202,29 @@ export default function StepStudentReview({
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    setLightbox({ url: localImageUrl, page: page.pageIndex + 1 })
+                                    setLightbox({
+                                      url: localImageUrl,
+                                      page: page.pageIndex + 1,
+                                      isPdf,
+                                    })
                                   }
                                   className="group block h-40 w-32 cursor-zoom-in overflow-hidden rounded-md border border-line bg-cream shadow-paper"
-                                  aria-label={`View page ${page.pageIndex + 1} photo`}
+                                  aria-label={`View page ${page.pageIndex + 1}`}
                                 >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={localImageUrl}
-                                    alt={`Page ${page.pageIndex + 1}`}
-                                    className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                                  />
+                                  {isPdf ? (
+                                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-cream">
+                                      <span className="rounded-md bg-pen px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                                        PDF
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={localImageUrl}
+                                      alt={`Page ${page.pageIndex + 1}`}
+                                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                    />
+                                  )}
                                 </button>
                               ) : (
                                 <div
@@ -367,16 +387,24 @@ export default function StepStudentReview({
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-6"
           role="dialog"
           aria-modal="true"
-          aria-label={`Page ${lightbox.page} photo`}
+          aria-label={`Page ${lightbox.page} preview`}
           onClick={() => setLightbox(null)}
         >
           <div className="relative max-h-full" onClick={(e) => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={lightbox.url}
-              alt={`Page ${lightbox.page}`}
-              className="max-h-[85vh] max-w-full rounded-lg border border-line bg-paper shadow-lifted"
-            />
+            {lightbox.isPdf ? (
+              <iframe
+                title={`Page ${lightbox.page} PDF`}
+                src={lightbox.url}
+                className="h-[85vh] w-[min(90vw,48rem)] rounded-lg border border-line bg-paper shadow-lifted"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={lightbox.url}
+                alt={`Page ${lightbox.page}`}
+                className="max-h-[85vh] max-w-full rounded-lg border border-line bg-paper shadow-lifted"
+              />
+            )}
             <button
               type="button"
               onClick={() => setLightbox(null)}

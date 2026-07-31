@@ -9,6 +9,7 @@ const MIME_BY_EXT: Record<string, string> = {
   heif: "image/heif",
   webp: "image/webp",
   gif: "image/gif",
+  pdf: "application/pdf",
 };
 
 function guessMimeType(storagePath: string, fallback?: string) {

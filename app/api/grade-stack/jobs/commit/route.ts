@@ -6,6 +6,7 @@ import { tests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { OcrAnswer, StackAssignment } from "@/lib/types";
 import {
+  clearIdempotencyKey,
   createGradeStackJob,
   findJobById,
   findJobByIdempotencyKey,
@@ -86,12 +87,15 @@ export async function POST(request: NextRequest) {
 
     if (idempotencyKey) {
       const existing = await findJobByIdempotencyKey(idempotencyKey);
-      if (existing && existing.status !== "failed" && existing.status !== "cancelled") {
-        const mapped = mapGradeStackJobRow(existing);
-        return NextResponse.json(
-          { jobId: mapped.id, phase: mapped.phase, status: mapped.status },
-          { status: 202 },
-        );
+      if (existing) {
+        if (existing.status !== "failed" && existing.status !== "cancelled") {
+          const mapped = mapGradeStackJobRow(existing);
+          return NextResponse.json(
+            { jobId: mapped.id, phase: mapped.phase, status: mapped.status },
+            { status: 202 },
+          );
+        }
+        await clearIdempotencyKey(existing.id);
       }
     }
 

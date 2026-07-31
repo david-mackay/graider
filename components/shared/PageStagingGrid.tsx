@@ -3,8 +3,26 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { IconX } from "@/components/shared/icons";
 
-const ACCEPTED_TYPES = ["image/jpeg", "image/jpg", "image/png"];
+const ACCEPTED_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+];
+const ACCEPTED_EXT = /\.(jpe?g|png|webp|heic|heif|pdf)$/i;
 const DEFAULT_MAX = 10;
+
+function isAcceptedFile(file: File): boolean {
+  if (ACCEPTED_TYPES.includes(file.type)) return true;
+  return ACCEPTED_EXT.test(file.name);
+}
+
+function isPdfFile(file: File): boolean {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+}
 
 export type StagedPage = {
   id: string;
@@ -82,14 +100,14 @@ export default function PageStagingGrid({
     const accepted: File[] = [];
     const rejected: string[] = [];
     for (const f of incoming) {
-      if (!ACCEPTED_TYPES.includes(f.type) && !/\.(jpe?g|png)$/i.test(f.name)) {
+      if (!isAcceptedFile(f)) {
         rejected.push(f.name);
       } else {
         accepted.push(f);
       }
     }
     if (rejected.length > 0) {
-      onError?.(`These files aren't JPG or PNG: ${rejected.join(", ")}`);
+      onError?.(`These files aren't JPG, PNG, or PDF: ${rejected.join(", ")}`);
     }
     setStaged((prev) => {
       const remaining = maxPages - prev.length;
@@ -202,12 +220,12 @@ export default function PageStagingGrid({
         </div>
         <p className="text-sm font-bold text-ink">{dropLabel}</p>
         <p className="mt-1 text-xs text-ink-soft">
-          JPG or PNG · up to {maxPages} page{maxPages !== 1 ? "s" : ""}
+          JPG, PNG, or PDF · up to {maxPages} file{maxPages !== 1 ? "s" : ""}
         </p>
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png"
+          accept="image/jpeg,image/png,image/webp,image/heic,application/pdf,.pdf"
           multiple
           className="hidden"
           onChange={(e) => {
@@ -262,14 +280,26 @@ export default function PageStagingGrid({
                     : "border-line",
                 ].join(" ")}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.previewUrl}
-                  alt={`Page ${index + 1}`}
-                  draggable={false}
-                  onClick={() => setLightboxIndex(index)}
-                  className="aspect-[3/4] w-full cursor-pointer object-cover"
-                />
+                {isPdfFile(item.file) ? (
+                  <div
+                    onClick={() => setLightboxIndex(index)}
+                    className="flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center gap-2 bg-cream px-3 text-center"
+                  >
+                    <span className="rounded-md bg-pen px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                      PDF
+                    </span>
+                    <p className="line-clamp-3 text-xs font-medium text-ink-soft">{item.file.name}</p>
+                  </div>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.previewUrl}
+                    alt={`Page ${index + 1}`}
+                    draggable={false}
+                    onClick={() => setLightboxIndex(index)}
+                    className="aspect-[3/4] w-full cursor-pointer object-cover"
+                  />
+                )}
                 <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
                   <span className="text-xs font-medium text-white">p{index + 1}</span>
                   <button
@@ -302,13 +332,21 @@ export default function PageStagingGrid({
             className="relative mx-4 flex max-h-[90vh] max-w-2xl flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={staged[lightboxIndex].previewUrl}
-              alt={`Page ${lightboxIndex + 1}`}
-              className="max-h-[80vh] w-full rounded-xl object-contain shadow-paper"
-              draggable={false}
-            />
+            {isPdfFile(staged[lightboxIndex].file) ? (
+              <iframe
+                title={`PDF ${lightboxIndex + 1}`}
+                src={staged[lightboxIndex].previewUrl}
+                className="h-[80vh] w-full min-w-[min(90vw,40rem)] rounded-xl bg-paper shadow-paper"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={staged[lightboxIndex].previewUrl}
+                alt={`Page ${lightboxIndex + 1}`}
+                className="max-h-[80vh] w-full rounded-xl object-contain shadow-paper"
+                draggable={false}
+              />
+            )}
             <div className="mt-3 flex items-center justify-between">
               <button
                 type="button"

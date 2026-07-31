@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@/components/shared/ui";
+import CopyableError from "@/components/shared/CopyableError";
 import type {
   GradingPhase,
   StudentGradingProgress,
@@ -65,11 +66,7 @@ export default function StepGradingProgress({
         </p>
       </Card>
 
-      {errorMessage ? (
-        <Card className="border-pen-soft/60 bg-pen-wash">
-          <p className="text-sm font-bold text-pen-deep">{errorMessage}</p>
-        </Card>
-      ) : null}
+      {errorMessage ? <CopyableError message={errorMessage} /> : null}
 
       <ul className="space-y-2">
         {students.map((student) => (

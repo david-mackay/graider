@@ -141,6 +141,25 @@ export async function failJob(
     .where(eq(gradeStackJobs.id, jobId));
 }
 
+/** Free the unique key so a retry can create a fresh job. */
+export async function clearIdempotencyKey(jobId: string) {
+  await db
+    .update(gradeStackJobs)
+    .set({ idempotencyKey: null, updatedAt: new Date() })
+    .where(eq(gradeStackJobs.id, jobId));
+}
+
+export async function cancelJob(jobId: string, reason = "Cancelled by teacher.") {
+  await db
+    .update(gradeStackJobs)
+    .set({
+      status: "cancelled",
+      error: reason,
+      updatedAt: new Date(),
+    })
+    .where(eq(gradeStackJobs.id, jobId));
+}
+
 export async function incrementAttemptCount(jobId: string) {
   const row = await findJobById(jobId);
   if (!row) return;

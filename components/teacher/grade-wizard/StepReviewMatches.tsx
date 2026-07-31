@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Card, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
 import { IconX } from "@/components/shared/icons";
+import CopyableError from "@/components/shared/CopyableError";
 import RosterPicker from "@/components/teacher/grade-wizard/RosterPicker";
 import {
   SKIP_VALUE,
@@ -145,11 +146,7 @@ export default function StepReviewMatches({
         </p>
       </Card>
 
-      {errorMessage ? (
-        <Card className="border-pen-soft/60 bg-pen-wash">
-          <p className="text-sm font-bold text-pen-deep">{errorMessage}</p>
-        </Card>
-      ) : null}
+      {errorMessage ? <CopyableError message={errorMessage} /> : null}
 
       <ul className="space-y-3">
         {sortedPages.map((page) => {

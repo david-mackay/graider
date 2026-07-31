@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { handleJson } from "@/lib/dashboard-client";
+import { uploadPagesDirectToStorage } from "@/lib/direct-upload";
 import {
   defaultPresetForSurface,
   type DocumentParsePreset,
 } from "@/lib/parse-presets";
 import {
-  flattenStudentBuckets,
+  createEmptyBucket,
+  mergeReadyStudentPreviews,
+  pagesFingerprint,
   totalPageCount,
-  MAX_TOTAL_PAGES,
+  MAX_PAGES_PER_STUDENT,
   type StudentBucket,
 } from "@/lib/student-grade";
 import {
@@ -42,6 +45,7 @@ export type UseStudentGradeReturn = {
   preview: StackPreview | null;
   results: StackCommitResult | null;
   pageToStudentId: Map<number, string>;
+  reviewImageFiles: File[];
   gradingPhase: GradingPhase | null;
   activeJob: GradeStackJob | null;
   studentProgress: StudentGradingProgress[];
@@ -49,6 +53,8 @@ export type UseStudentGradeReturn = {
   errorMessage: string;
   limitCode: string | null;
   isBusy: boolean;
+  sendingStudentId: string | null;
+  readyCount: number;
   actions: {
     selectTest: (test: TestSummary) => void;
     selectStudent: (studentId: string, studentName: string) => void;
@@ -58,9 +64,10 @@ export type UseStudentGradeReturn = {
     resumeStudent: (studentId: string) => void;
     startAddStudent: () => void;
     setParsePreset: (preset: DocumentParsePreset) => void;
-    /** Replace the ocrAnswers for a specific page in the preview. */
     setOcrAnswers: (pageIndex: number, answers: OcrAnswer[]) => void;
-    submitSession: () => Promise<void>;
+    sendStudent: (studentId: string) => Promise<void>;
+    cancelSend: (studentId: string) => Promise<void>;
+    openReview: () => void;
     confirmAll: () => Promise<void>;
     back: () => void;
     restart: () => void;
@@ -68,20 +75,26 @@ export type UseStudentGradeReturn = {
   };
 };
 
-async function fetchJob(jobId: string): Promise<GradeStackJob> {
+async function fetchJob(jobId: string, signal?: AbortSignal): Promise<GradeStackJob> {
   return handleJson<GradeStackJob>(
-    await fetch(`/api/grade-stack/jobs/${jobId}`, { cache: "no-store" }),
+    await fetch(`/api/grade-stack/jobs/${jobId}`, { cache: "no-store", signal }),
   );
 }
 
 async function pollJobUntilTerminal(
   jobId: string,
-  onUpdate?: (job: GradeStackJob) => void,
+  options: {
+    onUpdate?: (job: GradeStackJob) => void;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<GradeStackJob> {
   const maxAttempts = 120;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const job = await fetchJob(jobId);
-    onUpdate?.(job);
+    if (options.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+    const job = await fetchJob(jobId, options.signal);
+    options.onUpdate?.(job);
     if (
       job.status === "needs_review" ||
       job.status === "completed" ||
@@ -90,9 +103,29 @@ async function pollJobUntilTerminal(
     ) {
       return job;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, 2000);
+      options.signal?.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          reject(new DOMException("Aborted", "AbortError"));
+        },
+        { once: true },
+      );
+    });
   }
   throw new Error("Timed out waiting for grading job.");
+}
+
+function patchBucket(
+  buckets: StudentBucket[],
+  studentId: string,
+  patch: Partial<StudentBucket>,
+): StudentBucket[] {
+  return buckets.map((bucket) =>
+    bucket.studentId === studentId ? { ...bucket, ...patch } : bucket,
+  );
 }
 
 export function useStudentGrade(): UseStudentGradeReturn {
@@ -106,13 +139,20 @@ export function useStudentGrade(): UseStudentGradeReturn {
   const [limitCode, setLimitCode] = useState<string | null>(null);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [pageToStudentId, setPageToStudentId] = useState<Map<number, string>>(new Map());
+  const [reviewImageFiles, setReviewImageFiles] = useState<File[]>([]);
   const [gradingPhase, setGradingPhase] = useState<GradingPhase | null>(null);
   const [activeJob, setActiveJob] = useState<GradeStackJob | null>(null);
   const [parsePreset, setParsePresetState] = useState<DocumentParsePreset>(() =>
     defaultPresetForSurface("grade_stack"),
   );
+  const abortByStudentRef = useRef<Map<string, AbortController>>(new Map());
+  const bucketsRef = useRef(buckets);
+  bucketsRef.current = buckets;
 
-  const isBusy = state === "grading";
+  const sendingStudentId =
+    buckets.find((bucket) => bucket.sendStatus === "sending")?.studentId ?? null;
+  const isBusy = state === "grading" || sendingStudentId !== null;
+  const readyCount = buckets.filter((b) => b.sendStatus === "ready").length;
 
   const setParsePreset = useCallback((preset: DocumentParsePreset) => {
     setParsePresetState(preset);
@@ -141,7 +181,17 @@ export function useStudentGrade(): UseStudentGradeReturn {
     return buckets.find((b) => b.studentId === activeStudentId) ?? null;
   }, [activeStudentId, buckets]);
 
+  const rebuildMergedPreview = useCallback((nextBuckets: StudentBucket[]) => {
+    const merged = mergeReadyStudentPreviews(nextBuckets);
+    setPreview(merged.pages.length > 0 ? { pages: merged.pages } : null);
+    setPageToStudentId(merged.pageToStudentId);
+    setReviewImageFiles(merged.imageFiles);
+    setPreviewJobId(merged.previewJobId);
+  }, []);
+
   const selectTest = useCallback((test: TestSummary) => {
+    for (const controller of abortByStudentRef.current.values()) controller.abort();
+    abortByStudentRef.current.clear();
     setSelectedTest(test);
     setBuckets([]);
     setActiveStudentId(null);
@@ -149,6 +199,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
     setResults(null);
     setPreviewJobId(null);
     setPageToStudentId(new Map());
+    setReviewImageFiles([]);
     setGradingPhase(null);
     setActiveJob(null);
     setErrorMessage("");
@@ -160,7 +211,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
     setBuckets((prev) => {
       const existing = prev.find((b) => b.studentId === studentId);
       if (existing) return prev;
-      return [...prev, { studentId, studentName, pages: [] }];
+      return [...prev, createEmptyBucket(studentId, studentName)];
     });
     setActiveStudentId(studentId);
     setState("capture");
@@ -175,13 +226,28 @@ export function useStudentGrade(): UseStudentGradeReturn {
   const setActivePages = useCallback(
     (pages: File[]) => {
       if (!activeStudentId) return;
-      setBuckets((prev) =>
-        prev.map((bucket) =>
-          bucket.studentId === activeStudentId ? { ...bucket, pages } : bucket,
-        ),
-      );
+      setBuckets((prev) => {
+        const current = prev.find((b) => b.studentId === activeStudentId);
+        if (!current) return prev;
+        const changed = pagesFingerprint(pages) !== pagesFingerprint(current.pages);
+        const next = patchBucket(prev, activeStudentId, {
+          pages,
+          ...(changed && current.sendStatus === "ready"
+            ? {
+                sendStatus: "idle" as const,
+                sendError: null,
+                previewJobId: null,
+                previewPages: [],
+              }
+            : {}),
+        });
+        if (changed && current.sendStatus === "ready") {
+          queueMicrotask(() => rebuildMergedPreview(next));
+        }
+        return next;
+      });
     },
-    [activeStudentId],
+    [activeStudentId, rebuildMergedPreview],
   );
 
   const finishActiveStudent = useCallback(() => {
@@ -196,9 +262,18 @@ export function useStudentGrade(): UseStudentGradeReturn {
     setState("sessionSummary");
   }, [activeStudentId, buckets]);
 
-  const removeBucket = useCallback((studentId: string) => {
-    setBuckets((prev) => prev.filter((b) => b.studentId !== studentId));
-  }, []);
+  const removeBucket = useCallback(
+    (studentId: string) => {
+      abortByStudentRef.current.get(studentId)?.abort();
+      abortByStudentRef.current.delete(studentId);
+      setBuckets((prev) => {
+        const next = prev.filter((b) => b.studentId !== studentId);
+        queueMicrotask(() => rebuildMergedPreview(next));
+        return next;
+      });
+    },
+    [rebuildMergedPreview],
+  );
 
   const startAddStudent = useCallback(() => {
     setActiveStudentId(null);
@@ -218,81 +293,201 @@ export function useStudentGrade(): UseStudentGradeReturn {
     });
   }, []);
 
-  const submitSession = useCallback(async () => {
-    if (!selectedTest) {
-      setErrorMessage("Pick a test first.");
-      return;
-    }
-    const nonEmpty = buckets.filter((b) => b.pages.length > 0);
-    if (nonEmpty.length === 0) {
-      setErrorMessage("Add at least one student with pages.");
-      return;
-    }
-    if (totalPageCount(nonEmpty) > MAX_TOTAL_PAGES) {
-      setErrorMessage(`Maximum ${MAX_TOTAL_PAGES} pages per grading session.`);
-      return;
-    }
+  const cancelSend = useCallback(async (studentId: string) => {
+    const controller = abortByStudentRef.current.get(studentId);
+    controller?.abort();
+    abortByStudentRef.current.delete(studentId);
 
-    setErrorMessage("");
-    setLimitCode(null);
-    setGradingPhase("preview");
-    setActiveJob(null);
-    setState("grading");
-
-    const { files, pageToStudentId: mapping } = flattenStudentBuckets(nonEmpty);
-    setPageToStudentId(mapping);
-
-    try {
-      const formData = new FormData();
-      const idempotencyKey = `student-first:${selectedTest.id}:${files
-        .map((f) => `${f.name}:${f.size}:${f.lastModified}`)
-        .join("|")}`;
-
-      formData.append("testId", selectedTest.id);
-      formData.append("classId", selectedTest.class_id);
-      formData.append("idempotencyKey", idempotencyKey);
-      formData.append("gradingMode", "student_first");
-      formData.append("parsePreset", parsePreset);
-      formData.append(
-        "studentPageAssignments",
-        JSON.stringify(
-          Array.from(mapping.entries()).map(([pageIndex, studentId]) => ({
-            pageIndex,
-            studentId,
-          })),
-        ),
-      );
-      for (const file of files) {
-        formData.append("images", file);
-      }
-
-      const created = await handleJson<{ jobId: string }>(
-        await fetch("/api/grade-stack/jobs/preview", {
+    const bucket = bucketsRef.current.find((b) => b.studentId === studentId);
+    const jobId = bucket?.previewJobId;
+    if (jobId) {
+      try {
+        await fetch(`/api/grade-stack/jobs/${jobId}`, {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "cancel" }),
+        });
+      } catch {
+        // Best-effort cancel; local UI still resets.
+      }
+    }
+
+    setBuckets((prev) =>
+      patchBucket(prev, studentId, {
+        sendStatus: "idle",
+        sendError: null,
+        previewJobId: null,
+        previewPages: [],
+      }),
+    );
+    setActiveJob(null);
+  }, []);
+
+  const sendStudent = useCallback(
+    async (studentId: string) => {
+      if (!selectedTest) {
+        setErrorMessage("Pick a test first.");
+        return;
+      }
+      const bucket = bucketsRef.current.find((b) => b.studentId === studentId);
+      if (!bucket || bucket.pages.length === 0) {
+        setErrorMessage("Add at least one page before sending.");
+        return;
+      }
+      if (bucket.pages.length > MAX_PAGES_PER_STUDENT) {
+        setErrorMessage(`Maximum ${MAX_PAGES_PER_STUDENT} pages per student.`);
+        return;
+      }
+      if (bucket.sendStatus === "sending") return;
+
+      abortByStudentRef.current.get(studentId)?.abort();
+      const controller = new AbortController();
+      abortByStudentRef.current.set(studentId, controller);
+
+      setErrorMessage("");
+      setLimitCode(null);
+      setBuckets((prev) =>
+        patchBucket(prev, studentId, {
+          sendStatus: "sending",
+          sendError: null,
+          previewJobId: null,
+          previewPages: [],
         }),
       );
-      setPreviewJobId(created.jobId);
 
-      const job = await pollJobUntilTerminal(created.jobId, (update) => {
-        setActiveJob(update);
-      });
-      if (job.status === "failed" || job.status === "cancelled") {
-        throw new Error(job.error ?? "Preview job failed.");
+      try {
+        const idempotencyKey = `student-first:${selectedTest.id}:${studentId}:${pagesFingerprint(bucket.pages)}`;
+        const studentPageAssignments = bucket.pages.map((_, pageIndex) => ({
+          pageIndex,
+          studentId,
+        }));
+
+        let created: { jobId: string };
+
+        try {
+          const uploaded = await uploadPagesDirectToStorage({
+            testId: selectedTest.id,
+            classId: selectedTest.class_id,
+            files: bucket.pages,
+            signal: controller.signal,
+          });
+
+          created = await handleJson<{ jobId: string }>(
+            await fetch("/api/grade-stack/jobs/preview", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: controller.signal,
+              body: JSON.stringify({
+                testId: selectedTest.id,
+                classId: selectedTest.class_id,
+                idempotencyKey,
+                gradingMode: "student_first",
+                parsePreset,
+                studentPageAssignments,
+                storagePaths: uploaded.storagePaths,
+                imageMeta: uploaded.imageMeta,
+              }),
+            }),
+          );
+        } catch (directError) {
+          const code =
+            directError instanceof Error
+              ? (directError as Error & { code?: string }).code
+              : undefined;
+          // Local / misconfigured storage: fall back to multipart through the API.
+          if (code !== "OBJECT_STORAGE_UNAVAILABLE") throw directError;
+
+          const formData = new FormData();
+          formData.append("testId", selectedTest.id);
+          formData.append("classId", selectedTest.class_id);
+          formData.append("idempotencyKey", idempotencyKey);
+          formData.append("gradingMode", "student_first");
+          formData.append("parsePreset", parsePreset);
+          formData.append("studentPageAssignments", JSON.stringify(studentPageAssignments));
+          for (const file of bucket.pages) {
+            formData.append("images", file);
+          }
+
+          created = await handleJson<{ jobId: string }>(
+            await fetch("/api/grade-stack/jobs/preview", {
+              method: "POST",
+              body: formData,
+              signal: controller.signal,
+            }),
+          );
+        }
+
+        setBuckets((prev) => patchBucket(prev, studentId, { previewJobId: created.jobId }));
+
+        const job = await pollJobUntilTerminal(created.jobId, {
+          signal: controller.signal,
+          onUpdate: (update) => {
+            if (bucketsRef.current.find((b) => b.studentId === studentId)?.sendStatus === "sending") {
+              setActiveJob(update);
+            }
+          },
+        });
+
+        if (job.status === "failed" || job.status === "cancelled") {
+          throw new Error(job.error ?? "Preview job failed.");
+        }
+
+        const pages = job.preview?.pages ?? [];
+        setBuckets((prev) => {
+          const next = patchBucket(prev, studentId, {
+            sendStatus: "ready",
+            sendError: null,
+            previewJobId: created.jobId,
+            previewPages: pages,
+          });
+          queueMicrotask(() => rebuildMergedPreview(next));
+          return next;
+        });
+        setActiveJob(null);
+        setActiveStudentId(null);
+        setState("sessionSummary");
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          setBuckets((prev) =>
+            patchBucket(prev, studentId, {
+              sendStatus: "idle",
+              sendError: null,
+              previewJobId: null,
+              previewPages: [],
+            }),
+          );
+          setActiveJob(null);
+          return;
+        }
+        const rawMessage = error instanceof Error ? error.message : "Failed to read pages.";
+        setBuckets((prev) =>
+          patchBucket(prev, studentId, {
+            sendStatus: "error",
+            sendError: rawMessage,
+          }),
+        );
+        setErrorMessage(rawMessage);
+        setActiveJob(null);
+      } finally {
+        abortByStudentRef.current.delete(studentId);
       }
+    },
+    [parsePreset, rebuildMergedPreview, selectedTest],
+  );
 
-      setPreview({ pages: job.preview?.pages ?? [] });
-      setGradingPhase(null);
-      setActiveJob(null);
-      setState("reviewing");
-    } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : "Failed to read pages.";
-      setErrorMessage(rawMessage);
-      setGradingPhase(null);
-      setActiveJob(null);
-      setState("sessionSummary");
+  const openReview = useCallback(() => {
+    const merged = mergeReadyStudentPreviews(bucketsRef.current);
+    if (merged.pages.length === 0) {
+      setErrorMessage("Send at least one student before reviewing.");
+      return;
     }
-  }, [buckets, selectedTest, parsePreset]);
+    setPreview({ pages: merged.pages });
+    setPageToStudentId(merged.pageToStudentId);
+    setReviewImageFiles(merged.imageFiles);
+    setPreviewJobId(merged.previewJobId);
+    setErrorMessage("");
+    setState("reviewing");
+  }, []);
 
   const confirmAll = useCallback(async () => {
     const testId = selectedTest?.id;
@@ -339,15 +534,15 @@ export function useStudentGrade(): UseStudentGradeReturn {
             previewJobId,
             testId,
             assignments: payloadAssignments,
-            idempotencyKey: `student-first-commit:${previewJobId}:${testId}:${payloadAssignments
-              .map((e) => `${e.pageIndex}:${e.studentId}`)
+            idempotencyKey: `student-first-commit:${testId}:${payloadAssignments
+              .map((e) => `${e.pageIndex}:${e.studentId}:${e.storagePath ?? ""}`)
               .join("|")}`,
           }),
         }),
       );
 
-      const job = await pollJobUntilTerminal(created.jobId, (update) => {
-        setActiveJob(update);
+      const job = await pollJobUntilTerminal(created.jobId, {
+        onUpdate: (update) => setActiveJob(update),
       });
       if (job.status === "failed" || job.status === "cancelled") {
         setErrorMessage(job.error ?? "Commit job failed.");
@@ -373,7 +568,8 @@ export function useStudentGrade(): UseStudentGradeReturn {
     setErrorMessage("");
     setState((prev) => {
       if (prev === "pickStudent") return "pickTest";
-      if (prev === "capture") return buckets.some((b) => b.pages.length > 0) ? "sessionSummary" : "pickStudent";
+      if (prev === "capture")
+        return buckets.some((b) => b.pages.length > 0) ? "sessionSummary" : "pickStudent";
       if (prev === "sessionSummary") return "pickStudent";
       if (prev === "reviewing") {
         return buckets.some((b) => b.pages.length > 0) ? "sessionSummary" : "pickTest";
@@ -384,6 +580,8 @@ export function useStudentGrade(): UseStudentGradeReturn {
   }, [buckets]);
 
   const restart = useCallback(() => {
+    for (const controller of abortByStudentRef.current.values()) controller.abort();
+    abortByStudentRef.current.clear();
     setSelectedTest(null);
     setBuckets([]);
     setActiveStudentId(null);
@@ -391,6 +589,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
     setResults(null);
     setPreviewJobId(null);
     setPageToStudentId(new Map());
+    setReviewImageFiles([]);
     setGradingPhase(null);
     setActiveJob(null);
     setParsePresetState(defaultPresetForSurface("grade_stack"));
@@ -414,7 +613,9 @@ export function useStudentGrade(): UseStudentGradeReturn {
       startAddStudent,
       setParsePreset,
       setOcrAnswers,
-      submitSession,
+      sendStudent,
+      cancelSend,
+      openReview,
       confirmAll,
       back,
       restart,
@@ -430,7 +631,9 @@ export function useStudentGrade(): UseStudentGradeReturn {
       startAddStudent,
       setParsePreset,
       setOcrAnswers,
-      submitSession,
+      sendStudent,
+      cancelSend,
+      openReview,
       confirmAll,
       back,
       restart,
@@ -446,6 +649,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
     preview,
     results,
     pageToStudentId,
+    reviewImageFiles,
     gradingPhase,
     activeJob,
     studentProgress,
@@ -453,6 +657,8 @@ export function useStudentGrade(): UseStudentGradeReturn {
     errorMessage,
     limitCode,
     isBusy,
+    sendingStudentId,
+    readyCount,
     actions,
   };
 }
