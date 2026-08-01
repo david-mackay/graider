@@ -11,8 +11,6 @@ type StudentClassesViewProps = {
   attempts: DashboardAttempt[];
   joinCode: string;
   setJoinCode: (value: string) => void;
-  joinEmail: string;
-  setJoinEmail: (value: string) => void;
   onJoin: (event: FormEvent<HTMLFormElement>) => void;
   onSelectClass: (classId: string) => void;
   isBusy: boolean;
@@ -24,8 +22,6 @@ export default function StudentClassesView({
   attempts,
   joinCode,
   setJoinCode,
-  joinEmail,
-  setJoinEmail,
   onJoin,
   onSelectClass,
   isBusy,
@@ -37,22 +33,18 @@ export default function StudentClassesView({
       <Card>
         <h3 className="mb-4 text-sm font-semibold text-ink">Join a class</h3>
         <form onSubmit={onJoin} className="space-y-3 sm:flex sm:items-end sm:gap-3 sm:space-y-0">
-          <FormField label="Invite code">
+          <FormField
+            label="Invite code"
+            hint="If the invite is email-bound, sign in with that email first."
+          >
             <input
-              className={inputClass}
+              className={`${inputClass} font-mono tracking-wider uppercase`}
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               placeholder="Enter code from your teacher"
+              autoComplete="off"
+              spellCheck={false}
               required
-            />
-          </FormField>
-          <FormField label="Email (if required)">
-            <input
-              className={inputClass}
-              value={joinEmail}
-              onChange={(e) => setJoinEmail(e.target.value)}
-              placeholder="your@email.com"
-              type="email"
             />
           </FormField>
           <button disabled={isBusy} className={`${btnPrimary} flex-shrink-0`} type="submit">

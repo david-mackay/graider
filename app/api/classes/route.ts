@@ -3,78 +3,23 @@ import { getCurrentUser, requireRole } from "@/lib/auth";
 import { assertCanCreateClass, SubscriptionLimitError } from "@/lib/subscriptions/limits";
 import { db } from "@/lib/db";
 import { classes, classMemberships } from "@/drizzle/schema";
-import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import { type SchoolClass } from "@/lib/types";
+import { listClassesForUser, type ListedClass } from "@/lib/classes/list-for-user";
+import { invalidateUserClasses } from "@/lib/classes/invalidate";
 
 function generateInviteCode() {
   return randomUUID().split("-")[0].toUpperCase();
 }
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "private, no-store",
+};
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
-
-    const memberships = await db
-      .select({ classId: classMemberships.classId, role: classMemberships.role })
-      .from(classMemberships)
-      .where(
-        and(
-          eq(classMemberships.userId, user.id),
-          eq(classMemberships.status, "active"),
-        ),
-      );
-
-    const classIds = memberships.map((row) => row.classId);
-    if (classIds.length === 0) {
-      return NextResponse.json({ classes: [] });
-    }
-
-    const classRows = await db
-      .select({
-        id: classes.id,
-        name: classes.name,
-        owner_user_id: classes.ownerUserId,
-        invite_code: classes.inviteCode,
-        created_at: classes.createdAt,
-      })
-      .from(classes)
-      .where(inArray(classes.id, classIds))
-      .orderBy(desc(classes.createdAt));
-
-    const membershipByClass = new Map<string, "teacher" | "student">();
-    for (const row of memberships) {
-      membershipByClass.set(row.classId, row.role as "teacher" | "student");
-    }
-
-    const studentCounts = await db
-      .select({
-        classId: classMemberships.classId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(classMemberships)
-      .where(
-        and(
-          inArray(classMemberships.classId, classIds),
-          eq(classMemberships.role, "student"),
-          eq(classMemberships.status, "active"),
-        ),
-      )
-      .groupBy(classMemberships.classId);
-
-    const studentCountByClass = new Map<string, number>();
-    for (const row of studentCounts) {
-      studentCountByClass.set(row.classId, Number(row.count) || 0);
-    }
-
-    const result = classRows.map((row) => ({
-      ...row,
-      created_at: row.created_at?.toISOString() ?? null,
-      role_in_class: membershipByClass.get(row.id),
-      student_count: studentCountByClass.get(row.id) ?? 0,
-    }));
-
-    return NextResponse.json({ classes: result });
+    const result = await listClassesForUser(user.id);
+    return NextResponse.json({ classes: result }, { headers: NO_STORE_HEADERS });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     const status = message === "UNAUTHORIZED" ? 401 : message === "FORBIDDEN" ? 403 : 500;
@@ -111,7 +56,9 @@ export async function POST(request: NextRequest) {
       status: "active",
     });
 
-    const result: SchoolClass & { role_in_class: string; student_count: number } = {
+    await invalidateUserClasses(user.id);
+
+    const result: ListedClass = {
       id: classRow.id,
       name: classRow.name,
       owner_user_id: classRow.ownerUserId,
@@ -122,7 +69,7 @@ export async function POST(request: NextRequest) {
       student_count: 0,
     };
 
-    return NextResponse.json({ class: result }, { status: 201 });
+    return NextResponse.json({ class: result }, { status: 201, headers: NO_STORE_HEADERS });
   } catch (error) {
     if (error instanceof SubscriptionLimitError) {
       return NextResponse.json(

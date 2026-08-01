@@ -3,6 +3,15 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    # Local queue only: don't freeze the dataset when macOS disk pressure
+    # makes RDB snapshotting fail (common MISCONF / stop-writes-on-bgsave-error).
+    command:
+      - redis-server
+      - --save
+      - "60"
+      - "1000"
+      - --stop-writes-on-bgsave-error
+      - "no"
 
   postgres:
     image: postgres:16-alpine

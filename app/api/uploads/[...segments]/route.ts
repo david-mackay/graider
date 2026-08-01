@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { gradeStackJobs, tests } from "@/drizzle/schema";
 import { readFile } from "@/lib/storage";
 import { and, eq, sql } from "drizzle-orm";
+import { assertSafeStoragePath } from "@/lib/upload-policy";
 
 export const runtime = "nodejs";
 
@@ -62,10 +63,11 @@ async function authorizeStackPreviewUpload(storagePath: string, uploadKey: strin
 }
 
 async function assertTeacherCanReadUpload(storagePath: string) {
-  const normalized = storagePath.replace(/^\/+/, "");
-  if (normalized.includes("..")) {
+  const safe = assertSafeStoragePath(storagePath);
+  if (!safe.ok) {
     throw new Error("FORBIDDEN");
   }
+  const normalized = storagePath.replace(/^\/+/, "");
 
   const stackMatch = normalized.match(/^stack-preview\/([^/]+)\//);
   if (stackMatch) {
@@ -94,8 +96,12 @@ export async function GET(_request: Request, { params }: RouteContext) {
     }
 
     const storagePath = segments.join("/");
-    if (storagePath.includes("..")) {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    const safe = assertSafeStoragePath(storagePath);
+    if (!safe.ok) {
+      return NextResponse.json(
+        { error: safe.reason },
+        { status: safe.reason === "File path is required." ? 400 : 403 },
+      );
     }
     await assertTeacherCanReadUpload(storagePath);
 

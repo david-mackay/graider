@@ -82,7 +82,7 @@ export default function ProfileSetup({
           await fetch("/api/classes/join", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ inviteCode: inviteCode.trim() }),
+            body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase() }),
           }),
         );
       }

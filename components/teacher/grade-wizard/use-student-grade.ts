@@ -2,6 +2,15 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { handleJson } from "@/lib/dashboard-client";
+
+function redirectIfSubscriptionLimit(error: unknown): boolean {
+  const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  if (code === "GRADE_LIMIT" || code === "CLASS_LIMIT") {
+    window.location.assign("/t/billing");
+    return true;
+  }
+  return false;
+}
 import { uploadPagesDirectToStorage } from "@/lib/direct-upload";
 import {
   defaultPresetForSurface,
@@ -459,6 +468,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
           setActiveJob(null);
           return;
         }
+        if (redirectIfSubscriptionLimit(error)) return;
         const rawMessage = error instanceof Error ? error.message : "Failed to read pages.";
         setBuckets((prev) =>
           patchBucket(prev, studentId, {
@@ -557,6 +567,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
       setActiveJob(null);
       setState("results");
     } catch (error) {
+      if (redirectIfSubscriptionLimit(error)) return;
       setErrorMessage(error instanceof Error ? error.message : "Failed to grade.");
       setGradingPhase(null);
       setActiveJob(null);

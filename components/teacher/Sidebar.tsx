@@ -98,6 +98,12 @@ export default function TeacherSidebar({
               <p className="text-xs text-ink-faint">Teacher</p>
             </div>
           </div>
+          <Link
+            href="/t/billing"
+            className="mt-3 block text-center text-xs font-bold text-pen hover:text-pen-deep"
+          >
+            Billing &amp; Pro
+          </Link>
           <BecomeStudentCard onStatus={onStatus} />
         </div>
       ) : null}

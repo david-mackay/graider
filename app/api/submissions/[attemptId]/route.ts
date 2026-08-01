@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, classMemberships, appUsers } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { assertCanViewAttemptDetail } from "@/lib/submission-access-policy";
 
 type Params = { attemptId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -69,17 +70,22 @@ export async function GET(_request: Request, { params }: RouteContext) {
       )
       .limit(1);
 
-    if (!membership) {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    const access = assertCanViewAttemptDetail({
+      membershipRole:
+        membership?.role === "teacher"
+          ? "teacher"
+          : membership?.role === "student"
+            ? "student"
+            : null,
+      actorId: user.id,
+      attemptStudentId: attempt.studentId,
+      attemptStatus: attempt.status,
+      gradesReleased: test.gradesReleased,
+    });
+    if (!access.ok) {
+      return NextResponse.json({ error: access.reason }, { status: access.status });
     }
-
-    const isTeacher = membership.role === "teacher";
-    if (!isTeacher && attempt.studentId !== user.id) {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-    }
-    if (!isTeacher && (attempt.status !== "graded" || !test.gradesReleased)) {
-      return NextResponse.json({ error: "Grade not yet available." }, { status: 403 });
-    }
+    const isTeacher = access.isTeacher;
 
     const tqRows = await db
       .select({

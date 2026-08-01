@@ -5,6 +5,7 @@ import { uploadFile } from "@/lib/storage";
 import { extractHandwrittenAnswers } from "@/lib/reducto";
 import { coerceParsePreset } from "@/lib/parse-presets";
 import { matchOcrAnswersToQuestions } from "@/lib/stack-grading";
+import { canApplyOcrToAttempt } from "@/lib/attempt-ocr-policy";
 import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, ocrBatches } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
@@ -33,13 +34,26 @@ export async function POST(request: NextRequest) {
     }
 
     const [attempt] = await db
-      .select({ id: testAttempts.id, testId: testAttempts.testId })
+      .select({
+        id: testAttempts.id,
+        testId: testAttempts.testId,
+        source: testAttempts.source,
+        submittedAt: testAttempts.submittedAt,
+      })
       .from(testAttempts)
       .where(eq(testAttempts.id, attemptId))
       .limit(1);
 
     if (!attempt) {
       return NextResponse.json({ error: "Attempt not found." }, { status: 404 });
+    }
+
+    const ocrGate = canApplyOcrToAttempt({
+      source: attempt.source,
+      submittedAt: attempt.submittedAt,
+    });
+    if (!ocrGate.ok) {
+      return NextResponse.json({ error: ocrGate.reason }, { status: ocrGate.status });
     }
 
     const [test] = await db

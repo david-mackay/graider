@@ -3,13 +3,19 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { appUsers, classInvitations, classMemberships } from "@/drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { invalidateClassMemberCaches, invalidateUserClasses } from "@/lib/classes/invalidate";
+import {
+  assertInviteEmailBinding,
+  isInviteJoinable,
+  normalizeInviteCode,
+  shouldAcceptInviteForActiveMember,
+} from "@/lib/join-policy";
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     const payload = (await request.json()) as { inviteCode?: string; email?: string };
-    const inviteCode = payload.inviteCode?.trim();
-    const userEmail = payload.email?.trim().toLowerCase() || null;
+    const inviteCode = normalizeInviteCode(payload.inviteCode);
 
     if (!inviteCode) {
       return NextResponse.json({ error: "inviteCode is required." }, { status: 400 });
@@ -25,6 +31,7 @@ export async function POST(request: NextRequest) {
         expiresAt: classInvitations.expiresAt,
         status: classInvitations.status,
         singleUse: classInvitations.singleUse,
+        studentId: classInvitations.studentId,
       })
       .from(classInvitations)
       .where(eq(classInvitations.invitationCode, inviteCode))
@@ -34,62 +41,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid or expired invite code." }, { status: 404 });
     }
 
-    // Students may only join via a pending invite code (no open class codes).
-    if (invitation.role !== "teacher" && invitation.status !== "pending") {
-      return NextResponse.json(
-        { error: "This invite code has already been used." },
-        { status: 410 },
-      );
+    const joinable = isInviteJoinable({
+      status: invitation.status,
+      role: invitation.role,
+      invitedName: invitation.invitedName,
+      expiresAt: invitation.expiresAt,
+    });
+    if (!joinable.ok) {
+      return NextResponse.json({ error: joinable.reason }, { status: joinable.status });
     }
 
-    // Pre-named-invite codes: ask teacher to delete and create a named invite.
-    if (invitation.role === "student" && !invitation.invitedName?.trim()) {
-      return NextResponse.json(
-        {
-          error:
-            "This invite code is outdated. Ask your teacher to delete it and create a new named invite.",
-        },
-        { status: 410 },
-      );
-    }
-
-    if (invitation.status === "accepted" && invitation.singleUse) {
-      return NextResponse.json({ error: "This invite code has already been used." }, { status: 410 });
-    }
-
-    if (invitation.singleUse && invitation.status !== "pending") {
-      return NextResponse.json({ error: "This invite code has already been used." }, { status: 410 });
-    }
-
-    if (invitation.expiresAt && invitation.expiresAt < new Date()) {
-      return NextResponse.json({ error: "This invite code has expired." }, { status: 410 });
-    }
-
-    const invitedEmail = invitation.invitedEmail;
-    if (invitedEmail && userEmail && userEmail !== invitedEmail) {
-      return NextResponse.json({ error: "Invite email does not match current user." }, { status: 403 });
-    }
-
-    if (invitedEmail && user.email && user.email.toLowerCase() !== invitedEmail) {
-      return NextResponse.json({ error: "Invite email does not match current user profile." }, { status: 403 });
+    const emailGate = assertInviteEmailBinding({
+      invitedEmail: invitation.invitedEmail,
+      profileEmail: user.email,
+    });
+    if (!emailGate.ok) {
+      return NextResponse.json({ error: emailGate.reason }, { status: emailGate.status });
     }
 
     const assignedRole = invitation.role === "teacher" ? "teacher" : "student";
-
-    // Apply the reserved name onto the joining student profile when missing.
-    if (assignedRole === "student" && invitation.invitedName) {
-      const [profile] = await db
-        .select({ fullName: appUsers.fullName })
-        .from(appUsers)
-        .where(eq(appUsers.id, user.id))
-        .limit(1);
-      if (!profile?.fullName?.trim()) {
-        await db
-          .update(appUsers)
-          .set({ fullName: invitation.invitedName })
-          .where(eq(appUsers.id, user.id));
-      }
-    }
 
     const [member] = await db
       .select({
@@ -106,44 +76,83 @@ export async function POST(request: NextRequest) {
       )
       .limit(1);
 
+    // Already an active member: do not burn unrelated pending invites.
     if (member?.status === "active") {
-      if (invitation.status === "pending") {
-        await db
-          .update(classInvitations)
-          .set({
-            status: "accepted",
-            studentId: user.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(classInvitations.id, invitation.id));
+      if (shouldAcceptInviteForActiveMember()) {
+        // Reserved for future invite-claiming flows; currently always false.
       }
       return NextResponse.json({ classId: invitation.classId, status: "already_member" });
     }
 
-    if (member?.id) {
-      await db
-        .update(classMemberships)
-        .set({ status: "active", role: assignedRole })
-        .where(eq(classMemberships.id, member.id));
-    } else {
-      await db.insert(classMemberships).values({
-        classId: invitation.classId,
-        userId: user.id,
-        role: assignedRole,
-        status: "active",
-      });
+    const result = await db.transaction(async (tx) => {
+      // Atomic single-use claim.
+      const [claimed] = await tx
+        .update(classInvitations)
+        .set({
+          status: "accepted",
+          studentId: user.id,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(classInvitations.id, invitation.id),
+            eq(classInvitations.status, "pending"),
+          ),
+        )
+        .returning({ id: classInvitations.id });
+
+      if (!claimed) {
+        return { conflict: true as const };
+      }
+
+      // Apply the reserved name onto the joining student profile when missing.
+      if (assignedRole === "student" && invitation.invitedName) {
+        const [profile] = await tx
+          .select({ fullName: appUsers.fullName })
+          .from(appUsers)
+          .where(eq(appUsers.id, user.id))
+          .limit(1);
+        if (!profile?.fullName?.trim()) {
+          await tx
+            .update(appUsers)
+            .set({ fullName: invitation.invitedName })
+            .where(eq(appUsers.id, user.id));
+        }
+      }
+
+      if (member?.id) {
+        // Reactivate without silently escalating role — keep existing class role.
+        await tx
+          .update(classMemberships)
+          .set({ status: "active" })
+          .where(eq(classMemberships.id, member.id));
+      } else {
+        await tx.insert(classMemberships).values({
+          classId: invitation.classId,
+          userId: user.id,
+          role: assignedRole,
+          status: "active",
+        });
+      }
+
+      return { conflict: false as const, role: member?.role ?? assignedRole };
+    });
+
+    if (result.conflict) {
+      return NextResponse.json(
+        { error: "This invite code has already been used." },
+        { status: 410 },
+      );
     }
 
-    await db
-      .update(classInvitations)
-      .set({
-        status: "accepted",
-        studentId: user.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(classInvitations.id, invitation.id));
+    await invalidateClassMemberCaches(invitation.classId);
+    await invalidateUserClasses(user.id);
 
-    return NextResponse.json({ classId: invitation.classId, joined: true, role: assignedRole });
+    return NextResponse.json({
+      classId: invitation.classId,
+      joined: true,
+      role: result.role,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     const status = message === "UNAUTHORIZED" ? 401 : message === "FORBIDDEN" ? 403 : 500;

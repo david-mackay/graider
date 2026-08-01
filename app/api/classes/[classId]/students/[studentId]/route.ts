@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireClassAccess } from "@/lib/auth";
 import { removeClassStudent, updateClassStudent } from "@/lib/roster-students";
+import { invalidateClassMemberCaches, invalidateUserClasses } from "@/lib/classes/invalidate";
 
 type Params = { classId: string; studentId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -32,7 +33,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
           ? 403
           : message === "Student not found in this class."
             ? 404
-            : message.includes("required") || message.includes("valid") || message.includes("update")
+            : message.includes("required") ||
+                message.includes("valid") ||
+                message.includes("update") ||
+                message.includes("Signed-in student profiles")
               ? 400
               : 500;
     return NextResponse.json({ error: message }, { status });
@@ -48,6 +52,8 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
     await requireClassAccess(classId, ["teacher"]);
     await removeClassStudent(classId, studentId);
+    await invalidateClassMemberCaches(classId);
+    await invalidateUserClasses(studentId);
 
     return NextResponse.json({ removed: true });
   } catch (error) {

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { testAttempts, tests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { AttemptNotSubmittedError, gradeOneAttempt } from "@/lib/grading";
+import { assertAttemptGradeable } from "@/lib/submission-access-policy";
 
 type GradePayload = {
   attemptId?: string;
@@ -32,11 +33,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Attempt not found." }, { status: 404 });
     }
 
-    if (!attempt.submittedAt) {
-      return NextResponse.json(
-        { error: "This attempt is still in progress and cannot be graded yet." },
-        { status: 409 },
-      );
+    const gradeable = assertAttemptGradeable({ submittedAt: attempt.submittedAt });
+    if (!gradeable.ok) {
+      return NextResponse.json({ error: gradeable.reason }, { status: gradeable.status });
     }
 
     const [test] = await db

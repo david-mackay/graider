@@ -62,6 +62,41 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       }
     }
 
+    const nextType =
+      updates.questionType ??
+      (payload.question_type === "mcq" || payload.question_type === "open"
+        ? payload.question_type
+        : null);
+    if (nextType === "mcq" || (updates.correctAnswer && !nextType)) {
+      // When updating an MCQ answer key (or switching to MCQ), require A–E.
+      const answerToCheck = updates.correctAnswer;
+      if (answerToCheck || nextType === "mcq") {
+        const raw = answerToCheck ?? payload.correct_answer?.trim();
+        if (raw) {
+          const letter = raw.toUpperCase().match(/^([A-E])\b/)?.[1];
+          if (!letter) {
+            return NextResponse.json(
+              { error: "MCQ correct_answer must be a letter A–E." },
+              { status: 400 },
+            );
+          }
+          const choiceKeys = updates.choices;
+          if (choiceKeys && choiceKeys.length > 0 && !choiceKeys.some((c) => c.key === letter)) {
+            return NextResponse.json(
+              { error: "MCQ correct_answer must match one of the choice keys." },
+              { status: 400 },
+            );
+          }
+          updates.correctAnswer = letter;
+        } else if (nextType === "mcq" && payload.correct_answer !== undefined) {
+          return NextResponse.json(
+            { error: "MCQ correct_answer must be a letter A–E." },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
     if (!Object.keys(updates).length) {
       return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
     }

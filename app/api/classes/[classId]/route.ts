@@ -3,6 +3,7 @@ import { requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { classes } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
+import { invalidateClassMemberCaches } from "@/lib/classes/invalidate";
 
 type Params = { classId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -39,6 +40,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (!updated) {
       return NextResponse.json({ error: "Class not found." }, { status: 404 });
     }
+
+    await invalidateClassMemberCaches(classId);
 
     return NextResponse.json({
       class: {

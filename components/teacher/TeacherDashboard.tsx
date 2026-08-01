@@ -61,6 +61,28 @@ export default function TeacherDashboard() {
     return selectedClassId !== ALL_CLASSES_VALUE ? selectedClassId : "";
   }
 
+  async function loadScopedData(classId: string) {
+    if (!classId) {
+      setQuestions([]);
+      setClassMembers([]);
+      return;
+    }
+    try {
+      const [qRes, mRes] = await Promise.all([
+        handleJson<{ questions: DashboardQuestion[] }>(
+          await fetch(`/api/questions?classId=${classId}`, { cache: "no-store" }),
+        ),
+        handleJson<{ members: ClassMember[] }>(
+          await fetch(`/api/classes/${classId}/members`, { cache: "no-store" }),
+        ),
+      ]);
+      setQuestions(qRes.questions ?? []);
+      setClassMembers(mRes.members ?? []);
+    } catch (error) {
+      if (error instanceof Error) setStatus(error.message, "error");
+    }
+  }
+
   async function loadDashboard() {
     try {
       const userRes = await handleJson<{ user: { role: AppRole; full_name: string | null } }>(
@@ -77,9 +99,18 @@ export default function TeacherDashboard() {
         return;
       }
 
-      const classRes = await handleJson<{ classes: DashboardClass[] }>(
-        await fetch("/api/classes", { cache: "no-store" }),
-      );
+      const [classRes, testsRes, attemptsRes] = await Promise.all([
+        handleJson<{ classes: DashboardClass[] }>(
+          await fetch("/api/classes", { cache: "no-store" }),
+        ),
+        handleJson<{ tests: DashboardTest[] }>(
+          await fetch("/api/tests", { cache: "no-store" }),
+        ),
+        handleJson<{ attempts: DashboardAttempt[] }>(
+          await fetch("/api/submissions", { cache: "no-store" }),
+        ),
+      ]);
+
       const loadedClasses = classRes.classes ?? [];
       setClasses(loadedClasses);
 
@@ -90,17 +121,13 @@ export default function TeacherDashboard() {
             : ALL_CLASSES_VALUE
           : ALL_CLASSES_VALUE;
 
-      if (selectedClassId !== nextSelectedClassId) setSelectedClassId(nextSelectedClassId);
+      if (selectedClassId !== nextSelectedClassId) {
+        setSelectedClassId(nextSelectedClassId);
+      }
 
-      const testsRes = await handleJson<{ tests: DashboardTest[] }>(
-        await fetch("/api/tests", { cache: "no-store" }),
-      );
       const loadedTests = testsRes.tests ?? [];
       setTests(loadedTests);
 
-      const attemptsRes = await handleJson<{ attempts: DashboardAttempt[] }>(
-        await fetch("/api/submissions", { cache: "no-store" }),
-      );
       const attemptsByClass = new Map(loadedTests.map((t) => [t.id, t.class_id] as const));
       setAttempts(
         (attemptsRes.attempts ?? []).map((a) => ({
@@ -109,21 +136,8 @@ export default function TeacherDashboard() {
         })),
       );
 
-      const scopedClassId = nextSelectedClassId !== ALL_CLASSES_VALUE ? nextSelectedClassId : "";
-      if (scopedClassId) {
-        const qRes = await handleJson<{ questions: DashboardQuestion[] }>(
-          await fetch(`/api/questions?classId=${scopedClassId}`, { cache: "no-store" }),
-        );
-        setQuestions(qRes.questions ?? []);
-
-        const mRes = await handleJson<{ members: ClassMember[] }>(
-          await fetch(`/api/classes/${scopedClassId}/members`, { cache: "no-store" }),
-        );
-        setClassMembers(mRes.members ?? []);
-      } else {
-        setQuestions([]);
-        setClassMembers([]);
-      }
+      const scopedId = nextSelectedClassId !== ALL_CLASSES_VALUE ? nextSelectedClassId : "";
+      await loadScopedData(scopedId);
     } catch (error) {
       if (error instanceof Error) setStatus(error.message, "error");
     }
@@ -133,7 +147,14 @@ export default function TeacherDashboard() {
     if (!isLoaded || !isSignedIn) return;
     void loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, isSignedIn, selectedClassId]);
+  }, [isLoaded, isSignedIn]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    const scopedId = selectedClassId !== ALL_CLASSES_VALUE ? selectedClassId : "";
+    void loadScopedData(scopedId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClassId]);
 
   async function loadInvites(classId: string) {
     try {

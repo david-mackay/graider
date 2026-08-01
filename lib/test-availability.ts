@@ -8,6 +8,9 @@ export type TestScheduleFields = {
   allowLateSubmit?: boolean | null;
 };
 
+/** Small skew allowance for client clocks / autosubmit latency (not a forged grace window). */
+export const SUBMIT_CLOCK_SKEW_MS = 15_000;
+
 function asDate(value: Date | string | null | undefined): Date | null {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -23,15 +26,22 @@ export function normalizeTestStatus(raw: string | null | undefined): TestStatus 
   return "draft";
 }
 
-/** Whether a student may start (or continue a draft) right now. */
+/** Whether a student may start a new attempt right now. */
 export function isTestAvailableNow(test: TestScheduleFields, now = new Date()): boolean {
   const status = normalizeTestStatus(test.status);
-  if (status === "draft" || status === "closed") return false;
+  if (status === "draft") return false;
+
+  if (status === "closed") {
+    // Closed tests are only startable when late submissions are explicitly allowed.
+    return Boolean(test.allowLateSubmit);
+  }
+
   if (status === "open") {
     const closesAt = asDate(test.closesAt);
     if (closesAt && now > closesAt && !test.allowLateSubmit) return false;
     return true;
   }
+
   // scheduled: must be inside [opens_at, closes_at]
   const opensAt = asDate(test.opensAt);
   const closesAt = asDate(test.closesAt);
@@ -48,37 +58,47 @@ export function getAttemptDeadline(
   const closesAt = asDate(test.closesAt);
   const started = asDate(startedAt);
   const duration = test.durationMinutes;
-  let durationEnd: Date | null = null;
+  // Per-attempt duration is authoritative once started. The class window
+  // (closesAt) gates *starting* via isTestAvailableNow, not finishing.
   if (started && typeof duration === "number" && duration > 0) {
-    durationEnd = new Date(started.getTime() + duration * 60_000);
+    return new Date(started.getTime() + duration * 60_000);
   }
-  if (closesAt && durationEnd) {
-    return closesAt.getTime() < durationEnd.getTime() ? closesAt : durationEnd;
-  }
-  return durationEnd ?? closesAt;
+  return closesAt;
 }
 
-/** Whether submit is allowed for an in-progress (or just-started) attempt. */
+/**
+ * Whether submit is allowed for an in-progress attempt.
+ * Requires a prior start (startedAt). Does not authorize creating new attempts.
+ */
 export function canSubmitAttempt(
   test: TestScheduleFields,
   startedAt: Date | string | null | undefined,
   now = new Date(),
 ): { ok: true } | { ok: false; reason: string } {
-  const deadline = getAttemptDeadline(test, startedAt);
-  if (deadline && now > deadline && !test.allowLateSubmit) {
-    return { ok: false, reason: "Time is up for this test." };
-  }
   const status = normalizeTestStatus(test.status);
   if (status === "draft") {
     return { ok: false, reason: "This test is not available." };
   }
+
+  const opensAt = asDate(test.opensAt);
+  if (status === "scheduled" && opensAt && now < opensAt) {
+    return { ok: false, reason: "This test is not open yet." };
+  }
+
+  const deadline = getAttemptDeadline(test, startedAt);
+  if (deadline && now.getTime() > deadline.getTime() + SUBMIT_CLOCK_SKEW_MS && !test.allowLateSubmit) {
+    return { ok: false, reason: "Time is up for this test." };
+  }
+
+  // Teacher closed the window: still allow finish if the student has remaining
+  // duration (or late is on). Otherwise block.
   if (status === "closed" && !test.allowLateSubmit) {
+    if (deadline && now.getTime() <= deadline.getTime() + SUBMIT_CLOCK_SKEW_MS) {
+      return { ok: true };
+    }
     return { ok: false, reason: "This test is closed." };
   }
-  // Window flipped closed but student still inside their duration: allow via deadline check above.
-  if (!isTestAvailableNow(test, now) && !test.allowLateSubmit && !deadline) {
-    return { ok: false, reason: "This test is not available." };
-  }
+
   return { ok: true };
 }
 

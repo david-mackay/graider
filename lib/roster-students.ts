@@ -89,6 +89,10 @@ export async function updateClassStudent(params: {
 }) {
   await assertStudentInClass(params.classId, params.studentId);
 
+  if (!isRosterManagedUserId(params.studentId)) {
+    throw new Error("Signed-in student profiles can only be changed by the student.");
+  }
+
   const patch: { fullName?: string; email?: string | null } = {};
   if (params.fullName !== undefined) {
     patch.fullName = normalizeStudentName(params.fullName);

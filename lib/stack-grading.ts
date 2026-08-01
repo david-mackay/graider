@@ -12,6 +12,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { extractHandwrittenStack } from "@/lib/reducto";
 import { coerceParsePreset, type DocumentParsePreset } from "@/lib/parse-presets";
 import { gradeOneAttempt } from "@/lib/grading";
+import { canApplyOcrToAttempt } from "@/lib/attempt-ocr-policy";
 import {
   OcrAnswer,
   RosterEntry,
@@ -418,7 +419,11 @@ export async function commitStack(params: {
 
     // Idempotent attempt creation: same pattern as teacher-attempt.
     const [existing] = await db
-      .select({ id: testAttempts.id })
+      .select({
+        id: testAttempts.id,
+        source: testAttempts.source,
+        submittedAt: testAttempts.submittedAt,
+      })
       .from(testAttempts)
       .where(
         and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, studentId)),
@@ -429,6 +434,13 @@ export async function commitStack(params: {
     let created: boolean;
 
     if (existing) {
+      const gate = canApplyOcrToAttempt({
+        source: existing.source,
+        submittedAt: existing.submittedAt,
+      });
+      if (!gate.ok) {
+        throw new Error(gate.reason);
+      }
       attemptId = existing.id;
       created = false;
     } else {

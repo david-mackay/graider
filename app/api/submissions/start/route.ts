@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { tests, testAttempts, classMemberships } from "@/drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { canSubmitAttempt, getAttemptDeadline, isTestAvailableNow } from "@/lib/test-availability";
+import { listDraftAnswers } from "@/lib/draft-answers";
+import { assertStudentClassEnrollment } from "@/lib/submission-access-policy";
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,8 +34,11 @@ export async function POST(request: NextRequest) {
       )
       .limit(1);
 
-    if (!membership) {
-      return NextResponse.json({ error: "You are not enrolled in this class." }, { status: 403 });
+    const enrolled = assertStudentClassEnrollment({
+      membershipRole: membership?.role === "student" ? "student" : null,
+    });
+    if (!enrolled.ok) {
+      return NextResponse.json({ error: enrolled.reason }, { status: enrolled.status });
     }
 
     const [existing] = await db
@@ -63,6 +68,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: check.reason }, { status: 403 });
         }
         const deadline = getAttemptDeadline(test, existing.startedAt);
+        const answers = await listDraftAnswers(existing.id);
         return NextResponse.json({
           attempt_id: existing.id,
           status: "draft",
@@ -70,6 +76,7 @@ export async function POST(request: NextRequest) {
           deadline_at: deadline?.toISOString() ?? null,
           duration_minutes: test.durationMinutes,
           resumed: true,
+          answers,
         });
       }
       return NextResponse.json(
@@ -83,30 +90,60 @@ export async function POST(request: NextRequest) {
     }
 
     const startedAt = new Date();
-    const [attempt] = await db
-      .insert(testAttempts)
-      .values({
-        testId,
-        studentId: student.id,
-        source: "student",
-        status: "draft",
-        startedAt,
-      })
-      .returning();
+    try {
+      const [attempt] = await db
+        .insert(testAttempts)
+        .values({
+          testId,
+          studentId: student.id,
+          source: "student",
+          status: "draft",
+          startedAt,
+        })
+        .returning();
 
-    if (!attempt) {
+      if (!attempt) {
+        return NextResponse.json({ error: "Failed to start attempt." }, { status: 500 });
+      }
+
+      const deadline = getAttemptDeadline(test, startedAt);
+      return NextResponse.json({
+        attempt_id: attempt.id,
+        status: attempt.status,
+        started_at: startedAt.toISOString(),
+        deadline_at: deadline?.toISOString() ?? null,
+        duration_minutes: test.durationMinutes,
+        resumed: false,
+        answers: [],
+      });
+    } catch {
+      // Concurrent start race on unique (test_id, student_id) — resume the winner.
+      const [raced] = await db
+        .select()
+        .from(testAttempts)
+        .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, student.id)))
+        .limit(1);
+      if (raced && !raced.submittedAt) {
+        const deadline = getAttemptDeadline(test, raced.startedAt);
+        const answers = await listDraftAnswers(raced.id);
+        return NextResponse.json({
+          attempt_id: raced.id,
+          status: "draft",
+          started_at: raced.startedAt?.toISOString() ?? null,
+          deadline_at: deadline?.toISOString() ?? null,
+          duration_minutes: test.durationMinutes,
+          resumed: true,
+          answers,
+        });
+      }
+      if (raced?.submittedAt) {
+        return NextResponse.json(
+          { error: "You have already submitted this test.", attempt_id: raced.id },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ error: "Failed to start attempt." }, { status: 500 });
     }
-
-    const deadline = getAttemptDeadline(test, startedAt);
-    return NextResponse.json({
-      attempt_id: attempt.id,
-      status: attempt.status,
-      started_at: startedAt.toISOString(),
-      deadline_at: deadline?.toISOString() ?? null,
-      duration_minutes: test.durationMinutes,
-      resumed: false,
-    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     const status = message === "UNAUTHORIZED" ? 401 : message === "FORBIDDEN" ? 403 : 500;

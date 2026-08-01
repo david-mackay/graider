@@ -55,7 +55,6 @@ export default function StudentDashboard() {
   const [selectedAttemptDetail, setSelectedAttemptDetail] = useState<GradedAttemptDetail | null>(null);
 
   const [joinCode, setJoinCode] = useState("");
-  const [joinEmail, setJoinEmail] = useState("");
 
   const [statusMessage, setStatusMessage] = useState("");
   const [statusType, setStatusType] = useState<StatusType>("info");
@@ -174,8 +173,8 @@ export default function StudentDashboard() {
     setSidebarOpen(false);
   }
 
-  async function submitJoin(code: string, email?: string) {
-    const trimmedCode = code.trim();
+  async function submitJoin(code: string) {
+    const trimmedCode = code.trim().toUpperCase();
     if (!trimmedCode) return;
     setIsBusy(true);
     try {
@@ -183,11 +182,10 @@ export default function StudentDashboard() {
         await fetch("/api/classes/join", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ inviteCode: trimmedCode, email: email?.trim() || undefined }),
+          body: JSON.stringify({ inviteCode: trimmedCode }),
         }),
       );
       setJoinCode("");
-      setJoinEmail("");
       setStatus("Successfully joined class!");
       await loadDashboard();
     } catch (error) {
@@ -199,7 +197,7 @@ export default function StudentDashboard() {
 
   async function joinClass(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await submitJoin(joinCode, joinEmail);
+    await submitJoin(joinCode);
   }
 
   async function openTestForSubmission(testId: string) {
@@ -215,6 +213,7 @@ export default function StudentDashboard() {
         started_at?: string | null;
         deadline_at?: string | null;
         duration_minutes?: number | null;
+        answers?: Array<{ question_id: string; answer: string }>;
       };
       if (!startRes.ok) {
         if (startRes.status === 409) {
@@ -232,6 +231,11 @@ export default function StudentDashboard() {
       setSelectedTest(detail.test);
       const initial: Record<string, string> = {};
       for (const q of detail.test.questions) initial[q.question_id] = "";
+      for (const row of startPayload.answers ?? []) {
+        if (row.question_id in initial) {
+          initial[row.question_id] = row.answer ?? "";
+        }
+      }
       setTestTakingAnswers(initial);
       setSelectedClassId(detail.test.class_id);
       setActiveAttempt({
@@ -248,6 +252,21 @@ export default function StudentDashboard() {
   function closeTestTaking() {
     setSelectedTest(null);
     setActiveAttempt(null);
+  }
+
+  async function saveDraft(answers: Record<string, string>) {
+    if (!activeAttempt?.attempt_id) return;
+    const payload = Object.entries(answers).map(([question_id, answer]) => ({
+      question_id,
+      answer,
+    }));
+    await handleJson(
+      await fetch(`/api/submissions/${activeAttempt.attempt_id}/draft`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: payload }),
+      }),
+    );
   }
 
   async function openAttemptDetail(attemptId: string) {
@@ -400,6 +419,7 @@ export default function StudentDashboard() {
                 test={selectedTest}
                 answers={testTakingAnswers}
                 onChangeAnswer={(qid, value) => setTestTakingAnswers((c) => ({ ...c, [qid]: value }))}
+                onSaveDraft={saveDraft}
                 onSubmit={submitTest}
                 onClose={closeTestTaking}
                 isBusy={isBusy}
@@ -416,8 +436,6 @@ export default function StudentDashboard() {
                   attempts={attempts}
                   joinCode={joinCode}
                   setJoinCode={setJoinCode}
-                  joinEmail={joinEmail}
-                  setJoinEmail={setJoinEmail}
                   onJoin={joinClass}
                   onSelectClass={(id) => {
                     setSelectedClassId(id);

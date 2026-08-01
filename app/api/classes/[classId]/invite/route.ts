@@ -4,6 +4,7 @@ import { requireRole, requireClassAccess, getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { classInvitations, appUsers } from "@/drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { validateInviteCreate } from "@/lib/invite-create-policy";
 
 function makeInviteCode() {
   return randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
@@ -84,17 +85,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const invitedEmail = payload.invited_email?.trim().toLowerCase() || null;
     const invitedName = payload.invited_name?.trim() || null;
 
-    if (role === "student") {
-      if (!invitedName) {
-        return NextResponse.json(
-          { error: "Student invites must include a name." },
-          { status: 400 },
-        );
-      }
+    const inviteGate = validateInviteCreate({ role, invitedName });
+    if (!inviteGate.ok) {
+      return NextResponse.json({ error: inviteGate.reason }, { status: 400 });
     }
-
-    // Student invites are always single-use and name-bound.
-    const singleUse = role === "student" ? true : payload.single_use !== false;
+    const singleUse = inviteGate.singleUse;
 
     let expiresAt: Date | null = null;
     if (typeof payload.expires_in_days === "number" && payload.expires_in_days > 0) {

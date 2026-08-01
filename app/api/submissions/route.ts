@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole, getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { tests, testAttempts, testQuestions, attemptAnswers, classMemberships, appUsers } from "@/drizzle/schema";
-import { eq, and, inArray, desc } from "drizzle-orm";
-import { canSubmitAttempt, getAttemptDeadline } from "@/lib/test-availability";
+import { eq, and, inArray, desc, isNull } from "drizzle-orm";
+import { canSubmitAttempt } from "@/lib/test-availability";
+import {
+  assertNotAlreadySubmitted,
+  assertStudentClassEnrollment,
+  assertSubmitHasStarted,
+} from "@/lib/submission-access-policy";
 
 type SubmitPayload = {
   testId?: string;
@@ -154,37 +159,40 @@ export async function POST(request: NextRequest) {
       )
       .limit(1);
 
-    if (!membership) {
-      return NextResponse.json({ error: "You are not enrolled in this class." }, { status: 403 });
+    const enrolled = assertStudentClassEnrollment({
+      membershipRole: membership?.role === "student" ? "student" : null,
+    });
+    if (!enrolled.ok) {
+      return NextResponse.json({ error: enrolled.reason }, { status: enrolled.status });
     }
 
-    let [attempt] = await db
+    const [attempt] = await db
       .select()
       .from(testAttempts)
       .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, student.id)))
       .limit(1);
 
-    // Only block a second submit after a real submission. Status alone is not
-    // enough — a teacher may have AI-graded a still-in-progress attempt.
-    if (attempt?.submittedAt) {
+    // Submissions must go through /api/submissions/start first (schedule gate lives there).
+    const started = assertSubmitHasStarted({ attemptExists: Boolean(attempt) });
+    if (!started.ok) {
+      return NextResponse.json({ error: started.reason }, { status: started.status });
+    }
+
+    const already = assertNotAlreadySubmitted({
+      submittedAt: attempt!.submittedAt,
+      attemptId: attempt!.id,
+    });
+    if (!already.ok) {
       return NextResponse.json(
-        { error: "You have already submitted this test.", attempt_id: attempt.id },
-        { status: 409 },
+        { error: already.reason, attempt_id: already.attempt_id },
+        { status: already.status },
       );
     }
 
-    const startedAt = attempt?.startedAt ?? new Date();
+    const startedAt = attempt.startedAt ?? new Date();
     const check = canSubmitAttempt(test, startedAt);
-    // Allow timed-out autosubmit even if slightly past deadline.
-    if (!check.ok && !timedOut) {
+    if (!check.ok) {
       return NextResponse.json({ error: check.reason }, { status: 403 });
-    }
-    if (!check.ok && timedOut) {
-      const deadline = getAttemptDeadline(test, startedAt);
-      // Grace: accept timeout submits within 2 minutes of deadline
-      if (deadline && Date.now() > deadline.getTime() + 120_000 && !test.allowLateSubmit) {
-        return NextResponse.json({ error: check.reason }, { status: 403 });
-      }
     }
 
     const tqRows = await db
@@ -209,25 +217,14 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    if (!attempt) {
-      const [created] = await db
-        .insert(testAttempts)
-        .values({
-          testId,
-          studentId: student.id,
-          source: "student",
-          status: "submitted",
-          startedAt,
-          submittedAt: now,
-          timedOutAt: timedOut ? now : null,
-        })
-        .returning({ id: testAttempts.id });
-      if (!created) {
-        return NextResponse.json({ error: "Failed to create attempt." }, { status: 500 });
-      }
-      attempt = { id: created.id } as typeof attempt;
-    } else {
-      await db
+    const answerRows = filteredAnswers.map((answer) => ({
+      attemptId: attempt.id,
+      questionId: answer.questionId,
+      studentAnswer: answer.studentAnswer,
+    }));
+
+    const submitted = await db.transaction(async (tx) => {
+      const [claimed] = await tx
         .update(testAttempts)
         .set({
           status: "submitted",
@@ -239,28 +236,26 @@ export async function POST(request: NextRequest) {
           gradedAt: null,
           updatedAt: now,
         })
-        .where(eq(testAttempts.id, attempt.id));
-    }
+        .where(and(eq(testAttempts.id, attempt.id), isNull(testAttempts.submittedAt)))
+        .returning({ id: testAttempts.id });
 
-    const answerRows = filteredAnswers.map((answer) => ({
-      attemptId: attempt!.id,
-      questionId: answer.questionId,
-      studentAnswer: answer.studentAnswer,
-    }));
-
-    try {
-      await db.insert(attemptAnswers).values(answerRows);
-    } catch {
-      // If answers already exist (retry), replace
-      await db.delete(attemptAnswers).where(eq(attemptAnswers.attemptId, attempt!.id));
-      try {
-        await db.insert(attemptAnswers).values(answerRows);
-      } catch {
-        return NextResponse.json({ error: "Failed to save answers." }, { status: 500 });
+      if (!claimed) {
+        return null;
       }
+
+      await tx.delete(attemptAnswers).where(eq(attemptAnswers.attemptId, attempt.id));
+      await tx.insert(attemptAnswers).values(answerRows);
+      return claimed;
+    });
+
+    if (!submitted) {
+      return NextResponse.json(
+        { error: "You have already submitted this test.", attempt_id: attempt.id },
+        { status: 409 },
+      );
     }
 
-    return NextResponse.json({ attempt_id: attempt!.id });
+    return NextResponse.json({ attempt_id: attempt.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     const status = message === "UNAUTHORIZED" ? 401 : message === "FORBIDDEN" ? 403 : 500;

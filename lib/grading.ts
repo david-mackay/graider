@@ -1,5 +1,6 @@
 import { gradeQuestion } from "@/lib/openrouter";
 import { gradeMcqExact } from "@/lib/mcq";
+import { gradeAttributionForQuestionType } from "@/lib/grade-attribution";
 import { db } from "@/lib/db";
 import { testAttempts, testQuestions, questionBank, attemptAnswers } from "@/drizzle/schema";
 import { eq, asc } from "drizzle-orm";
@@ -61,7 +62,12 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
     answerRows.map((answer) => [answer.questionId, answer]),
   );
 
-  const gradeRows: { id: string; marksEarned: number; feedback: string }[] = [];
+  const gradeRows: {
+    id: string;
+    marksEarned: number;
+    feedback: string;
+    gradedBy: "exact" | "ai";
+  }[] = [];
   const graded: Array<{ question_id: string; marks_earned: number; feedback: string }> = [];
   let earnedTotal = 0;
   let maxTotal = 0;
@@ -69,20 +75,20 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
   for (const question of tqRows) {
     const answer = answerByQuestion.get(question.questionId);
     const studentAnswer = answer?.studentAnswer ?? "";
+    const isMcq = question.questionType === "mcq";
 
-    const grade =
-      question.questionType === "mcq"
-        ? gradeMcqExact({
-            teacherAnswer: question.correctAnswer,
-            studentAnswer,
-            marks: question.marks,
-          })
-        : await gradeQuestion({
-            question: question.prompt,
-            marks: question.marks,
-            teacher_answer: question.correctAnswer,
-            student_answer: studentAnswer,
-          });
+    const grade = isMcq
+      ? gradeMcqExact({
+          teacherAnswer: question.correctAnswer,
+          studentAnswer,
+          marks: question.marks,
+        })
+      : await gradeQuestion({
+          question: question.prompt,
+          marks: question.marks,
+          teacher_answer: question.correctAnswer,
+          student_answer: studentAnswer,
+        });
 
     maxTotal += question.marks;
     earnedTotal += grade.marks_earned;
@@ -92,6 +98,7 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
         id: answer.id,
         marksEarned: grade.marks_earned,
         feedback: grade.feedback,
+        gradedBy: gradeAttributionForQuestionType(question.questionType),
       });
     }
 
@@ -108,7 +115,7 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
       .set({
         marksEarned: row.marksEarned,
         feedback: row.feedback,
-        gradedBy: "ai",
+        gradedBy: row.gradedBy,
         updatedAt: new Date(),
       })
       .where(eq(attemptAnswers.id, row.id));

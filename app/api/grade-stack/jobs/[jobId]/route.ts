@@ -9,12 +9,15 @@ type RouteContext = { params: Promise<{ jobId: string }> };
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
-    await requireRole("teacher");
+    const teacher = await requireRole("teacher");
     const { jobId } = await context.params;
     const row = await findJobById(jobId);
 
     if (!row) {
       return NextResponse.json({ error: "Job not found." }, { status: 404 });
+    }
+    if (row.teacherId !== teacher.id) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
 
     return NextResponse.json(mapGradeStackJobRow(row));

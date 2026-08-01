@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireClassAccess } from "@/lib/auth";
 import { createClassStudent } from "@/lib/roster-students";
+import { invalidateClassMemberCaches } from "@/lib/classes/invalidate";
 
 type Params = { classId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       fullName: body.full_name ?? "",
       email: body.email,
     });
+
+    await invalidateClassMemberCaches(classId);
 
     return NextResponse.json({ student }, { status: 201 });
   } catch (error) {

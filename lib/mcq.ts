@@ -48,18 +48,18 @@ export function gradeMcqExact(params: {
   if (!got) {
     return {
       marks_earned: 0,
-      feedback: `Expected ${expected}, but no clear letter was found.`,
+      feedback: "Incorrect — no clear answer was recorded.",
     };
   }
   if (got === expected) {
     return {
       marks_earned: params.marks,
-      feedback: `Correct — ${expected}`,
+      feedback: "Correct",
     };
   }
   return {
     marks_earned: 0,
-    feedback: `Expected ${expected}, got ${got}`,
+    feedback: "Incorrect",
   };
 }
 

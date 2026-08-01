@@ -8,6 +8,10 @@
     "start": "next start",
     "worker:dev": "tsx --env-file=.env.local worker/main.ts",
     "worker:start": "tsx worker/main.ts",
+    "test": "npm run test:l1 && npm run test:api",
+    "test:m0": "npm run test:l1",
+    "test:l1": "node --import tsx --test 'lib/__tests__/**/*.test.ts'",
+    "test:api": "node --experimental-test-module-mocks --import tsx --test 'app/api/__tests__/**/*.test.ts'",
     "lint": "eslint",
     "db:push": "npx drizzle-kit push",
     "db:generate": "npx drizzle-kit generate",
@@ -21,6 +25,7 @@
   "dependencies": {
     "@clerk/nextjs": "latest",
     "@napi-rs/canvas": "^1.0.2",
+    "@revenuecat/purchases-js": "^1.51.0",
     "@supabase/supabase-js": "^2.110.2",
     "bullmq": "^5.77.6",
     "drizzle-orm": "^0.40.0",

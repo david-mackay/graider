@@ -5,18 +5,12 @@ import { tests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { createSignedUpload, usesObjectStorage } from "@/lib/storage";
 import { MAX_PAGES_PER_STUDENT } from "@/lib/student-grade";
+import {
+  isAllowedUploadContentType,
+  isAllowedUploadPurpose,
+} from "@/lib/upload-policy";
 
 export const runtime = "nodejs";
-
-const ALLOWED_CONTENT_TYPES = new Set([
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
-]);
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB — scanned PDFs can be large
 
@@ -63,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as SignPayload;
-    if (body.purpose !== "stack_preview") {
+    if (!isAllowedUploadPurpose(body.purpose)) {
       return NextResponse.json({ error: "Unsupported upload purpose." }, { status: 400 });
     }
 
@@ -112,7 +106,7 @@ export async function POST(request: NextRequest) {
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       const contentType = (file.contentType || "image/jpeg").toLowerCase();
-      if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+      if (!isAllowedUploadContentType(contentType)) {
         return NextResponse.json(
           { error: `Unsupported content type: ${contentType}` },
           { status: 400 },

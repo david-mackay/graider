@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { questionBank, testQuestions, tests } from "@/drizzle/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 import { QuestionBankQuestion } from "@/lib/types";
+import { normalizeMcqChoices, validateMcqAnswerKey } from "@/lib/mcq-validation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -88,21 +89,22 @@ export async function POST(request: NextRequest) {
     const topic = payload.topic?.trim() || null;
     const questionType = payload.question_type === "mcq" ? "mcq" : "open";
     const choices =
-      questionType === "mcq" && Array.isArray(payload.choices)
-        ? payload.choices
-            .filter(
-              (c): c is { key: string; text: string } =>
-                typeof c?.key === "string" && typeof c?.text === "string",
-            )
-            .map((c) => ({ key: c.key.trim().toUpperCase().slice(0, 1), text: c.text.trim() }))
-            .filter((c) => /^[A-E]$/.test(c.key))
-        : null;
+      questionType === "mcq" ? normalizeMcqChoices(payload.choices as Array<{ key?: string; text?: string }> | null) : null;
 
     if (!classId || !prompt || !correctAnswer || Number.isNaN(marks) || marks < 0) {
       return NextResponse.json(
         { error: "classId, prompt, correct_answer and marks are required." },
         { status: 400 },
       );
+    }
+
+    let normalizedCorrectAnswer = correctAnswer;
+    if (questionType === "mcq") {
+      const gate = validateMcqAnswerKey({ correctAnswer, choices });
+      if (!gate.ok) {
+        return NextResponse.json({ error: gate.reason }, { status: 400 });
+      }
+      normalizedCorrectAnswer = gate.letter;
     }
 
     await requireClassAccess(classId, ["teacher"]);
@@ -113,7 +115,7 @@ export async function POST(request: NextRequest) {
         teacherId: user.id,
         classId,
         prompt,
-        correctAnswer,
+        correctAnswer: normalizedCorrectAnswer,
         marks,
         topic,
         questionType,

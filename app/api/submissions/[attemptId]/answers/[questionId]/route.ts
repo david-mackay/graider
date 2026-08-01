@@ -37,13 +37,24 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const [attempt] = await db
-      .select({ id: testAttempts.id, testId: testAttempts.testId })
+      .select({
+        id: testAttempts.id,
+        testId: testAttempts.testId,
+        submittedAt: testAttempts.submittedAt,
+      })
       .from(testAttempts)
       .where(eq(testAttempts.id, attemptId))
       .limit(1);
 
     if (!attempt) {
       return NextResponse.json({ error: "Attempt not found." }, { status: 404 });
+    }
+
+    if (!attempt.submittedAt) {
+      return NextResponse.json(
+        { error: "This attempt is still in progress and cannot be graded yet." },
+        { status: 409 },
+      );
     }
 
     const [test] = await db
@@ -78,35 +89,37 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     let marksEarned: number;
     let feedback: string;
-    const patch: Record<string, unknown> = { gradedBy: "teacher", updatedAt: new Date() };
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
 
     if (regradeMode) {
       const newAnswer = (studentAnswerRaw as string).trim();
       patch.studentAnswer = newAnswer;
 
-      const grade =
-        questionLink.questionType === "mcq"
-          ? gradeMcqExact({
-              teacherAnswer: questionLink.correctAnswer,
-              studentAnswer: newAnswer,
-              marks: maxMarks,
-            })
-          : await gradeQuestion({
-              question: questionLink.prompt,
-              marks: maxMarks,
-              teacher_answer: questionLink.correctAnswer,
-              student_answer: newAnswer,
-            });
+      const isMcq = questionLink.questionType === "mcq";
+      const grade = isMcq
+        ? gradeMcqExact({
+            teacherAnswer: questionLink.correctAnswer,
+            studentAnswer: newAnswer,
+            marks: maxMarks,
+          })
+        : await gradeQuestion({
+            question: questionLink.prompt,
+            marks: maxMarks,
+            teacher_answer: questionLink.correctAnswer,
+            student_answer: newAnswer,
+          });
 
       marksEarned = grade.marks_earned;
       feedback = grade.feedback;
       patch.marksEarned = marksEarned;
       patch.feedback = feedback;
+      patch.gradedBy = isMcq ? "exact" : "ai";
     } else {
       marksEarned = Math.max(0, Math.min(maxMarks, Math.round(marksRaw as number)));
       feedback = (feedbackRaw as string).trim() || "Teacher adjusted this grade.";
       patch.marksEarned = marksEarned;
       patch.feedback = feedback;
+      patch.gradedBy = "teacher";
     }
 
     const [updated] = await db

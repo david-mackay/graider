@@ -88,6 +88,12 @@ export default function TeacherClassesView({
       onStatus(`Class “${payload.class.name}” created.`);
       await onCreated();
     } catch (error) {
+      const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+      if (code === "CLASS_LIMIT") {
+        onStatus("Free plan allows one class. Upgrade to Pro for unlimited classes.", "error");
+        window.location.assign("/t/billing");
+        return;
+      }
       if (error instanceof Error) onStatus(error.message, "error");
     } finally {
       setBusy(false);
@@ -103,7 +109,7 @@ export default function TeacherClassesView({
         await fetch("/api/classes/join", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ inviteCode: joinCode }),
+          body: JSON.stringify({ inviteCode: joinCode.trim().toUpperCase() }),
         }),
       );
       setJoinCode("");
