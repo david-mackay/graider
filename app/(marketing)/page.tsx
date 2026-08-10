@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { auth } from "@clerk/nextjs/server";
 import { getCurrentUser } from "@/lib/auth";
 import LandingPage from "@/components/marketing/LandingPage";
 import { hasClerkPublishableKey } from "@/lib/clerk-config";
+import { postAuthHomePath } from "@/lib/post-auth-routing";
+import { parseSignupIntentCookie } from "@/lib/signup-intent";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +33,13 @@ export default async function RootPage({ searchParams }: RootPageProps) {
   }
 
   const user = await getCurrentUser();
-  if (user.role === "teacher") {
-    redirect("/t");
-  }
-  redirect("/s");
+  const jar = await cookies();
+  const intent = parseSignupIntentCookie(jar.get("graider_signup_intent")?.value);
+  redirect(
+    postAuthHomePath({
+      role: user.role,
+      fullName: user.full_name,
+      signupIntent: intent,
+    }),
+  );
 }

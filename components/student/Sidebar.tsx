@@ -1,6 +1,7 @@
 "use client";
 
 import { IconClipboard, IconHome } from "@/components/shared/icons";
+import BecomeTeacherCard from "@/components/student/BecomeTeacherCard";
 import { ALL_CLASSES_VALUE } from "@/lib/dashboard-client";
 import type { ActiveView, DashboardClass } from "@/lib/dashboard-types";
 
@@ -18,6 +19,7 @@ type StudentSidebarProps = {
   activeView: ActiveView;
   onNavigate: (view: ActiveView) => void;
   profileName: string | null;
+  onStatus?: (message: string, type?: "info" | "error") => void;
 };
 
 export default function StudentSidebar({
@@ -27,6 +29,7 @@ export default function StudentSidebar({
   activeView,
   onNavigate,
   profileName,
+  onStatus,
 }: StudentSidebarProps) {
   return (
     <div className="flex flex-col h-full">
@@ -66,6 +69,11 @@ export default function StudentSidebar({
             </button>
           );
         })}
+        {classes.length === 0 ? (
+          <div className="px-1 pt-2">
+            <BecomeTeacherCard onStatus={onStatus} />
+          </div>
+        ) : null}
       </nav>
 
       {profileName ? (

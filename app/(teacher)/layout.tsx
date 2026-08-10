@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import { getCurrentUser } from "@/lib/auth";
+import { needsProfileSetup } from "@/lib/post-auth-routing";
 import AppHeader from "@/components/shared/AppHeader";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,10 @@ export default async function TeacherLayout({ children }: { children: React.Reac
   }
 
   const user = await getCurrentUser();
-  if (user.role !== "teacher") {
+  // New Clerk users default to role=student in DB. Teacher OAuth lands on /t before
+  // ProfileSetup can flip the role — allow incomplete profiles through so they aren't
+  // bounced into the student join flow.
+  if (user.role !== "teacher" && !needsProfileSetup(user.full_name)) {
     redirect("/s");
   }
 

@@ -8,6 +8,7 @@ import {
   clearSignupIntent,
   getSignupIntent,
   getStoredInviteCode,
+  setSignupIntent,
 } from "@/lib/signup-intent";
 import type { AppRole } from "@/lib/types";
 
@@ -35,8 +36,14 @@ export default function ProfileSetup({
   const [error, setError] = useState<string | null>(null);
   /** Allows escaping a teacher-locked setup into the student join path. */
   const [escapedToStudent, setEscapedToStudent] = useState(false);
+  /** Allows escaping a student-locked setup into the teacher path. */
+  const [escapedToTeacher, setEscapedToTeacher] = useState(false);
 
-  const effectiveLock: AppRole | undefined = escapedToStudent ? "student" : lockedRole;
+  const effectiveLock: AppRole | undefined = escapedToStudent
+    ? "student"
+    : escapedToTeacher
+      ? "teacher"
+      : lockedRole;
   const roleLocked = Boolean(effectiveLock);
 
   useEffect(() => {
@@ -44,6 +51,9 @@ export default function ProfileSetup({
     const storedInvite = getStoredInviteCode();
     if (escapedToStudent) {
       setRole("student");
+    } else if (escapedToTeacher) {
+      setRole("teacher");
+      setSignupIntent("teacher");
     } else if (lockedRole) {
       setRole(lockedRole);
     } else if (intent) {
@@ -58,7 +68,7 @@ export default function ProfileSetup({
       if (join) setInviteCode(join.toUpperCase());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once; escape handled separately
-  }, [escapedToStudent, lockedRole]);
+  }, [escapedToStudent, escapedToTeacher, lockedRole]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -197,9 +207,27 @@ export default function ProfileSetup({
                 <button
                   type="button"
                   className="cursor-pointer font-bold text-pen underline decoration-line underline-offset-2"
-                  onClick={() => setEscapedToStudent(true)}
+                  onClick={() => {
+                    setEscapedToTeacher(false);
+                    setEscapedToStudent(true);
+                  }}
                 >
                   Join a class instead
+                </button>
+              </p>
+            ) : null}
+            {lockedRole === "student" && !escapedToTeacher ? (
+              <p className="text-center text-xs text-ink-faint">
+                Meant to be a teacher?{" "}
+                <button
+                  type="button"
+                  className="cursor-pointer font-bold text-pen underline decoration-line underline-offset-2"
+                  onClick={() => {
+                    setEscapedToStudent(false);
+                    setEscapedToTeacher(true);
+                  }}
+                >
+                  Open the teacher workspace
                 </button>
               </p>
             ) : null}

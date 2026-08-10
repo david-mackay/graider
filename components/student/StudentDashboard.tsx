@@ -10,6 +10,7 @@ import {
   handleJson,
   type StatusType,
 } from "@/lib/dashboard-client";
+import { needsProfileSetup } from "@/lib/post-auth-routing";
 import type {
   ActiveView,
   DashboardAttempt,
@@ -107,10 +108,9 @@ export default function StudentDashboard() {
       const name = userRes.user.full_name;
       setProfileName(name);
 
-      const nameMissing = !name || /^user_[a-zA-Z0-9]{20,}$/.test(name);
-      if (nameMissing) {
+      if (needsProfileSetup(name)) {
         setNeedsProfile(true);
-        setProfileFormRole(nextRole);
+        setProfileFormRole(nextRole === "teacher" ? "teacher" : "student");
         return;
       }
 
@@ -376,6 +376,7 @@ export default function StudentDashboard() {
           activeView={activeView}
           onNavigate={navigate}
           profileName={profileName}
+          onStatus={setStatus}
         />
       </aside>
 
@@ -387,6 +388,7 @@ export default function StudentDashboard() {
           activeView={activeView}
           onNavigate={navigate}
           profileName={profileName}
+          onStatus={setStatus}
         />
       </aside>
 

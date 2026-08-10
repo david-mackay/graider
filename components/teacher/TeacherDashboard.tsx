@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { type AppRole } from "@/lib/types";
 import { ALL_CLASSES_VALUE, handleJson, type StatusType } from "@/lib/dashboard-client";
+import { needsProfileSetup } from "@/lib/post-auth-routing";
 import type {
   ActiveView,
   ClassMember,
@@ -92,10 +93,10 @@ export default function TeacherDashboard() {
       const name = userRes.user.full_name;
       setProfileName(name);
 
-      const nameMissing = !name || /^user_[a-zA-Z0-9]{20,}$/.test(name);
-      if (nameMissing) {
+      if (needsProfileSetup(name)) {
         setNeedsProfile(true);
-        setProfileFormRole(nextRole);
+        // Teacher entry path — don't inherit the DB default of "student".
+        setProfileFormRole("teacher");
         return;
       }
 
