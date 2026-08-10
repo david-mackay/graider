@@ -14,6 +14,9 @@ importers:
       '@napi-rs/canvas':
         specifier: ^1.0.2
         version: 1.0.2
+      '@revenuecat/purchases-js':
+        specifier: ^1.51.0
+        version: 1.52.0
       '@supabase/supabase-js':
         specifier: ^2.110.2
         version: 2.110.2
@@ -1092,6 +1095,9 @@ packages:
 
   '@petamoriken/float16@3.9.3':
     resolution: {integrity: sha512-8awtpHXCx/bNpFt4mt2xdkgtgVvKqty8VbjHI/WWWQuEw+KLzFot3f4+LkQY9YmOtq7A5GdOnqoIC8Pdygjk2g==}
+
+  '@revenuecat/purchases-js@1.52.0':
+    resolution: {integrity: sha512-DCxib99kv7+Dt+HlDnV9cOBgQz6BEUdsP1bi3hObhzGHGtBoVab9qMkEMLamVT33nipOtWZRlHcfNfk3iCbsdQ==}
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
@@ -3867,6 +3873,8 @@ snapshots:
   '@nolyfill/is-core-module@1.0.39': {}
 
   '@petamoriken/float16@3.9.3': {}
+
+  '@revenuecat/purchases-js@1.52.0': {}
 
   '@rtsao/scc@1.1.0': {}
 

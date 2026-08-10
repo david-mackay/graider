@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Blocks pushes when package.json and pnpm-lock.yaml have drifted
+# (the failure mode behind ERR_PNPM_OUTDATED_LOCKFILE on Vercel/CI).
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+exec bash scripts/ensure-lockfile.sh

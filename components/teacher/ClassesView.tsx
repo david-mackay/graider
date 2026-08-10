@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { Badge, Card, FormField, SectionHeader, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
-import { IconCheck, IconHome, IconPen, IconX } from "@/components/shared/icons";
+import { IconCheck, IconHome, IconPen, IconTrash, IconX } from "@/components/shared/icons";
 import { handleJson } from "@/lib/dashboard-client";
 import type { DashboardClass, DashboardTest } from "@/lib/dashboard-types";
 
@@ -29,6 +30,7 @@ export default function TeacherClassesView({
   isBusy,
   setBusy,
 }: TeacherClassesViewProps) {
+  const { user } = useUser();
   const [showCreateClassForm, setShowCreateClassForm] = useState(false);
   const [className, setClassName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -122,11 +124,34 @@ export default function TeacherClassesView({
     }
   }
 
+  async function deleteClass(entry: DashboardClass) {
+    const studentCount = entry.student_count ?? 0;
+    const confirmed = window.confirm(
+      `Delete “${entry.name}”? This permanently removes the class, its roster, tests, and related data. This cannot be undone.${
+        studentCount > 0 ? ` (${studentCount} student${studentCount !== 1 ? "s" : ""} will be removed from the class.)` : ""
+      }`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      await handleJson<{ deleted: boolean }>(
+        await fetch(`/api/classes/${entry.id}`, { method: "DELETE" }),
+      );
+      if (renameClassId === entry.id) cancelRename();
+      onStatus(`Class “${entry.name}” deleted.`);
+      await onCreated();
+    } catch (error) {
+      if (error instanceof Error) onStatus(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <SectionHeader
         title="Classes"
-        subtitle="Create and manage your classes. Click a class to open it."
+        subtitle="Create, rename, or delete classes. Open a class to manage students and tests."
         action={
           <button className={btnPrimary} type="button" onClick={() => setShowCreateClassForm((v) => !v)}>
             {showCreateClassForm ? "Cancel" : "+ New class"}
@@ -173,6 +198,8 @@ export default function TeacherClassesView({
           {classes.map((entry) => {
             const classTests = tests.filter((t) => t.class_id === entry.id);
             const gradedCount = attemptsGradedCountByClass.get(entry.id) ?? 0;
+            const canManage = entry.role_in_class === "teacher";
+            const isOwner = Boolean(user?.id && entry.owner_user_id === user.id);
             return (
               <Card key={entry.id} className="hover:border-line transition-colors duration-150">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -211,10 +238,10 @@ export default function TeacherClassesView({
                     ) : (
                       <div className="flex items-center gap-2">
                         <h4 className="font-display text-lg font-semibold text-ink">{entry.name}</h4>
-                        <Badge variant={entry.role_in_class === "teacher" ? "blue" : "gray"}>
+                        <Badge variant={canManage ? "blue" : "gray"}>
                           {entry.role_in_class ?? "member"}
                         </Badge>
-                        {entry.role_in_class === "teacher" ? (
+                        {canManage ? (
                           <button
                             type="button"
                             onClick={() => startRename(entry)}
@@ -223,6 +250,18 @@ export default function TeacherClassesView({
                             title="Rename class"
                           >
                             <IconPen className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                        {isOwner ? (
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => void deleteClass(entry)}
+                            className="cursor-pointer inline-flex h-7 w-7 items-center justify-center rounded-full text-ink-faint hover:bg-pen-wash hover:text-pen-deep transition-colors duration-150 disabled:opacity-50"
+                            aria-label={`Delete ${entry.name}`}
+                            title="Delete class"
+                          >
+                            <IconTrash className="h-3.5 w-3.5" />
                           </button>
                         ) : null}
                       </div>

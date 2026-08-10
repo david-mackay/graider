@@ -22,6 +22,7 @@ type AnyHandler = (...args: any[]) => Promise<Response>;
 let classesGET: AnyHandler;
 let classesPOST: AnyHandler;
 let classPATCH: AnyHandler;
+let classDELETE: AnyHandler;
 let joinPOST: AnyHandler;
 let inviteGET: AnyHandler;
 let invitePOST: AnyHandler;
@@ -45,7 +46,7 @@ describe("M2 classes / invites / roster L2 routes", () => {
   before(async () => {
     installL2Mocks();
     ({ GET: classesGET, POST: classesPOST } = await import("@/app/api/classes/route"));
-    ({ PATCH: classPATCH } = await import("@/app/api/classes/[classId]/route"));
+    ({ PATCH: classPATCH, DELETE: classDELETE } = await import("@/app/api/classes/[classId]/route"));
     ({ POST: joinPOST } = await import("@/app/api/classes/join/route"));
     ({ GET: inviteGET, POST: invitePOST, DELETE: inviteDELETE } = await import(
       "@/app/api/classes/[classId]/invite/route"
@@ -147,6 +148,33 @@ describe("M2 classes / invites / roster L2 routes", () => {
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.class.name, "Renamed");
+  });
+
+  it("CL-07 non-owner teacher cannot delete classA → 403", async () => {
+    setActor(actors.teacherB);
+    setClassRole(ids.classA, "teacher");
+    scriptedDb.enqueueSelect([{ ownerUserId: actors.teacherA.id, name: "Class A" }]);
+    const res = await classDELETE(
+      new NextRequest(`http://localhost/api/classes/${ids.classA}`, { method: "DELETE" }),
+      classParams,
+    );
+    assert.equal(res.status, 403);
+    const body = await res.json();
+    assert.match(body.error, /owner/i);
+  });
+
+  it("CL-08 owner can delete classA", async () => {
+    setActor(actors.teacherA);
+    setClassRole(ids.classA, "teacher");
+    scriptedDb.enqueueSelect([{ ownerUserId: actors.teacherA.id, name: "Class A" }]);
+    const res = await classDELETE(
+      new NextRequest(`http://localhost/api/classes/${ids.classA}`, { method: "DELETE" }),
+      classParams,
+    );
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.deleted, true);
+    assert.equal(body.name, "Class A");
   });
 
   it("JOIN-01 anon → 401", async () => {
