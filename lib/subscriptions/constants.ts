@@ -6,9 +6,9 @@ export const PRO_ANNUAL_PRODUCT_ID = "graider_pro_annual";
 
 /** Display prices (USD). Actual charged amount comes from RevenueCat / store. */
 export const PRO_MONTHLY_PRICE_USD = 24.99;
-export const PRO_ANNUAL_PRICE_USD = 240;
+export const PRO_ANNUAL_PRICE_USD = 239.99;
 export const PRO_MONTHLY_PRICE_LABEL = "$24.99/mo";
-export const PRO_ANNUAL_PRICE_LABEL = "$240/yr";
+export const PRO_ANNUAL_PRICE_LABEL = "$239.99/yr";
 /** Annual vs 12× monthly savings for marketing copy. */
 export const PRO_ANNUAL_SAVINGS_LABEL = "Save ~20%";
 

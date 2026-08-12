@@ -8,7 +8,7 @@ Freemium stack grading with a single **`pro`** entitlement across iOS (App Store
 |------|-------|--------|
 | Free | $0 | 1 owned class, 20 completed stack grades / calendar month |
 | Pro monthly | **$24.99 / month** | Unlimited classes + stack grades |
-| Pro annual | **$240 / year** (~20% vs monthly) | Same as monthly |
+| Pro annual | **$239.99 / year** (~20% vs monthly) | Same as monthly |
 
 Pre-auth onboarding sample grade is **not** gated.
 
@@ -40,7 +40,7 @@ Entitlement identifier: **`pro`**
 2. Create a **Web** / RevenueCat Billing config.
 3. Create products:
    - `graider_pro_monthly` → **$24.99 USD / month**
-   - `graider_pro_annual` → **$240 USD / year**
+   - `graider_pro_annual` → **$239.99 USD / year**
 4. Attach both to entitlement `pro`.
 5. Put both packages on the **current offering** (`$rc_monthly`, `$rc_annual`).
 6. Copy the **Web Billing public API key** into Vercel as `NEXT_PUBLIC_REVENUECAT_WEB_API_KEY`.
