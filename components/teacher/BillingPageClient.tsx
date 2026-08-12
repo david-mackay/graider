@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth, useUser } from "@clerk/nextjs";
 import {
@@ -26,7 +26,6 @@ type PackageAvailability = Record<SubscriptionPlanId, boolean>;
 export default function BillingPageClient() {
   const { userId, isLoaded: authLoaded } = useAuth();
   const { user } = useUser();
-  const checkoutHostRef = useRef<HTMLDivElement>(null);
 
   const [subscription, setSubscription] = useState<SubscriptionSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
@@ -125,11 +124,12 @@ export default function BillingPageClient() {
     setError(null);
     setStatus(null);
     try {
+      // Omit htmlTarget so Purchases.js mounts a full-page modal. Passing our
+      // zero-height host made checkout render invisibly while this promise hung.
       await purchasePlan({
         appUserId: userId,
         planId: selectedPlan,
         customerEmail: user?.primaryEmailAddress?.emailAddress ?? null,
-        htmlTarget: checkoutHostRef.current ?? undefined,
       });
       await syncFromRevenueCat();
       setStatus("Welcome to Pro — your limits are unlocked.");
@@ -273,10 +273,10 @@ export default function BillingPageClient() {
                 disabled={busy || packagesLoading || !availability[selectedPlan]}
                 onClick={() => void onUpgrade()}
               >
-                {busy ? "Opening checkout…" : `Continue with ${selectedPlan === "annual" ? "annual" : "monthly"} Pro`}
+                {busy
+                  ? "Complete checkout in the window…"
+                  : `Continue with ${selectedPlan === "annual" ? "annual" : "monthly"} Pro`}
               </button>
-
-              <div ref={checkoutHostRef} id="rc-checkout-host" className="min-h-0" />
             </>
           )}
         </Card>
