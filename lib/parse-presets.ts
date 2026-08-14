@@ -36,7 +36,7 @@ export const PARSE_PRESET_OPTIONS: ParsePresetOption[] = [
   {
     id: "scanned_or_photo",
     label: "Scanned / photo",
-    hint: "Faded scans or camera photos of printed pages.",
+    hint: "Faded scans, scan PDFs, or camera photos of printed pages.",
   },
   {
     id: "mcq_letter_key",
@@ -115,7 +115,7 @@ export function mapPresetToReducto(preset: DocumentParsePreset): ReductoParseMap
         intelligentOrdering: true,
         deepExtract: true,
         promptSuffix:
-          "Document is a scan or photo — correct OCR errors; read faded or skewed text carefully.",
+          "Document is a scan, scan PDF, or photo — correct OCR errors; read faded or skewed text carefully.",
       };
     case "mcq_letter_key":
       return {

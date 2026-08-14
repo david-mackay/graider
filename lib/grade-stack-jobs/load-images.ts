@@ -13,9 +13,11 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 
 function guessMimeType(storagePath: string, fallback?: string) {
-  if (fallback) return fallback;
   const ext = storagePath.split(".").pop()?.toLowerCase() ?? "";
-  return MIME_BY_EXT[ext] ?? "image/jpeg";
+  const fromExt = MIME_BY_EXT[ext];
+  if (fromExt === "application/pdf") return fromExt;
+  if (fallback && fallback !== "application/octet-stream") return fallback;
+  return fromExt ?? "image/jpeg";
 }
 
 export async function loadPreviewImagesFromStorage(input: GradeStackPreviewJobInput) {

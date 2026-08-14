@@ -44,7 +44,7 @@ export default function StepUploadStack({
 
   function handleSubmit() {
     if (files.length === 0) {
-      setLocalError("Add at least one image to continue.");
+      setLocalError("Add at least one photo or PDF to continue.");
       return;
     }
     void onSubmit(files, parsePreset);
@@ -56,7 +56,10 @@ export default function StepUploadStack({
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <h3 className="font-display text-lg font-semibold text-ink">{selectedTest.title}</h3>
-            <p className="text-xs text-ink-soft">Drop the photos of your stack of papers below.</p>
+            <p className="text-xs text-ink-soft">
+              Drop photos or scanned PDFs of the stack. &ldquo;Scanned / photo&rdquo; is the right
+              document type for camera shots and scan PDFs.
+            </p>
           </div>
           <span className="text-xs font-bold text-ink-faint">
             {files.length} / 10 pages

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { createSignedUpload, usesObjectStorage } from "@/lib/storage";
 import { MAX_PAGES_PER_STUDENT } from "@/lib/student-grade";
 import {
+  inferUploadContentType,
   isAllowedUploadContentType,
   isAllowedUploadPurpose,
 } from "@/lib/upload-policy";
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
-      const contentType = (file.contentType || "image/jpeg").toLowerCase();
+      const contentType = inferUploadContentType(file.filename, file.contentType);
       if (!isAllowedUploadContentType(contentType)) {
         return NextResponse.json(
           { error: `Unsupported content type: ${contentType}` },

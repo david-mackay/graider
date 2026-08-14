@@ -1,4 +1,5 @@
 import { handleJson } from "@/lib/dashboard-client";
+import { inferUploadContentType } from "@/lib/upload-policy";
 
 export type SignedUploadSlot = {
   path: string;
@@ -40,7 +41,7 @@ export async function uploadPagesDirectToStorage(params: {
         classId,
         files: files.map((file) => ({
           filename: file.name,
-          contentType: file.type || "image/jpeg",
+          contentType: inferUploadContentType(file.name, file.type),
           size: file.size,
         })),
       }),
@@ -57,7 +58,7 @@ export async function uploadPagesDirectToStorage(params: {
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
     const slot = signed.uploads[index];
-    const contentType = file.type || slot.contentType || "image/jpeg";
+    const contentType = inferUploadContentType(file.name, file.type || slot.contentType);
 
     const uploadRes = await fetch(slot.signedUrl, {
       method: "PUT",

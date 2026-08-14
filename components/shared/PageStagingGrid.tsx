@@ -11,6 +11,7 @@ const ACCEPTED_TYPES = [
   "image/heic",
   "image/heif",
   "application/pdf",
+  "application/x-pdf",
 ];
 const ACCEPTED_EXT = /\.(jpe?g|png|webp|heic|heif|pdf)$/i;
 const DEFAULT_MAX = 10;
@@ -21,7 +22,11 @@ function isAcceptedFile(file: File): boolean {
 }
 
 function isPdfFile(file: File): boolean {
-  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  return (
+    file.type === "application/pdf" ||
+    file.type === "application/x-pdf" ||
+    /\.pdf$/i.test(file.name)
+  );
 }
 
 export type StagedPage = {
