@@ -47,6 +47,10 @@ export default function SupportPage() {
           <a className="font-semibold text-pen underline" href="/privacy">
             Privacy Policy
           </a>
+          {" · "}
+          <a className="font-semibold text-pen underline" href="/terms">
+            Terms of Use
+          </a>
         </p>
       </LegalSection>
     </LegalDoc>

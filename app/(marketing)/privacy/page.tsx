@@ -122,6 +122,12 @@ export default function PrivacyPage() {
             graider.vercel.app/support
           </a>
         </p>
+        <p>
+          Terms of Use:{" "}
+          <a className="font-semibold text-pen underline" href="/terms">
+            graider.vercel.app/terms
+          </a>
+        </p>
       </LegalSection>
     </LegalDoc>
   );

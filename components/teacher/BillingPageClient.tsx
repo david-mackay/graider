@@ -277,6 +277,16 @@ export default function BillingPageClient() {
                   ? "Complete checkout in the window…"
                   : `Continue with ${selectedPlan === "annual" ? "annual" : "monthly"} Pro`}
               </button>
+              <p className="text-center text-xs leading-relaxed text-ink-faint">
+                Subscriptions auto-renew until cancelled.{" "}
+                <Link href="/privacy" className="font-semibold text-pen underline">
+                  Privacy Policy
+                </Link>
+                {" · "}
+                <Link href="/terms" className="font-semibold text-pen underline">
+                  Terms of Use
+                </Link>
+              </p>
             </>
           )}
         </Card>
