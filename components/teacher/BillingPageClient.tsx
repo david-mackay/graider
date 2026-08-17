@@ -105,12 +105,12 @@ export default function BillingPageClient() {
   const usageCopy = useMemo(() => {
     if (!subscription) return null;
     if (subscription.isPro) {
-      return "Unlimited classes and stack grades while Pro is active.";
+      return "Unlimited classes and tests graded while Pro is active.";
     }
     const grades =
       subscription.gradeLimit == null
-        ? `${subscription.gradesUsedThisMonth} stack grades this month`
-        : `${subscription.gradesUsedThisMonth} / ${subscription.gradeLimit} stack grades this month`;
+        ? `${subscription.gradesUsedThisMonth} tests graded this month`
+        : `${subscription.gradesUsedThisMonth} / ${subscription.gradeLimit} tests graded this month`;
     const classes =
       subscription.classLimit == null
         ? `${subscription.classesOwned} classes`
@@ -182,7 +182,7 @@ export default function BillingPageClient() {
 
       <SectionHeader
         title="Billing"
-        subtitle="Pro unlocks unlimited classes and stack grading on web and mobile."
+        subtitle="Pro unlocks unlimited classes and grading on web and iOS."
       />
 
       <Card className="mt-6 space-y-3">

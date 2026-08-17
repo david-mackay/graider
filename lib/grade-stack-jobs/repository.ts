@@ -54,7 +54,7 @@ export async function createGradeStackJob(params: CreateJobParams) {
     })
     .returning();
   if (!row) {
-    throw new Error("Failed to create grade stack job.");
+    throw new Error("Failed to start grading.");
   }
   return row;
 }

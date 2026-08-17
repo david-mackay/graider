@@ -14,7 +14,7 @@ export function canApplyOcrToAttempt(params: {
       ok: false,
       status: 409,
       reason:
-        "This student still has an in-progress digital attempt. Wait for them to submit, or clear that attempt before grading a paper stack.",
+        "This student still has an in-progress digital attempt. Wait for them to submit, or clear that attempt before grading their paper.",
     };
   }
   return {

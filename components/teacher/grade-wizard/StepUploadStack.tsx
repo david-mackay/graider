@@ -57,7 +57,7 @@ export default function StepUploadStack({
           <div>
             <h3 className="font-display text-lg font-semibold text-ink">{selectedTest.title}</h3>
             <p className="text-xs text-ink-soft">
-              Drop photos or scanned PDFs of the stack. &ldquo;Scanned / photo&rdquo; is the right
+              Drop photos or scanned PDFs of the class set. &ldquo;Scanned / photo&rdquo; is the right
               document type for camera shots and scan PDFs.
             </p>
           </div>
@@ -78,7 +78,7 @@ export default function StepUploadStack({
           onFilesChange={handleFilesChange}
           maxPages={10}
           disabled={isBusy}
-          dropLabel="Drag the whole stack in, or click to choose"
+          dropLabel="Drag the class set in, or click to choose"
           onError={setLocalError}
         />
 

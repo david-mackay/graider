@@ -16,7 +16,7 @@ export default function OnboardingHookPage() {
         <p className="font-hand text-2xl text-pen">Sunday, 7:42pm</p>
 
         <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.08] tracking-tight text-ink sm:text-5xl">
-          You&rsquo;re a great teacher. The stack of papers just gets in the way.
+          You&rsquo;re a great teacher. The papers just get in the way.
         </h1>
 
         <p className="mx-auto mt-6 max-w-md text-base leading-relaxed text-ink-soft sm:text-lg">

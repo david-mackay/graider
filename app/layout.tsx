@@ -23,7 +23,7 @@ const caveat = Caveat({
 export const metadata: Metadata = {
   title: "Graider — the AI red pen",
   description:
-    "Photograph a stack of papers and Graider reads, matches, and marks every one — so the grading is done before your coffee is.",
+    "Photograph the papers and Graider reads, matches, and marks every one — so the grading is done before your coffee is.",
 };
 
 export default function RootLayout({

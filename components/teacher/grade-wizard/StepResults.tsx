@@ -66,7 +66,7 @@ export default function StepResults({
             All pages were skipped. Try again with at least one assignment.
           </p>
           <button type="button" onClick={onRestart} className={btnPrimary}>
-            Grade another stack
+            Grade more papers
           </button>
         </div>
       </Card>
@@ -78,7 +78,7 @@ export default function StepResults({
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-hand text-2xl text-moss-deep">The stack is marked.</p>
+            <p className="font-hand text-2xl text-moss-deep">These papers are marked.</p>
             <h3 className="mt-1 font-display text-lg font-semibold text-ink">
               {results.results.length} paper{results.results.length === 1 ? "" : "s"} graded
               {classAverage != null ? ` · class average ${classAverage}%` : ""}
@@ -185,7 +185,7 @@ export default function StepResults({
           Back to dashboard
         </Link>
         <button type="button" onClick={onRestart} className={btnPrimary}>
-          Grade another stack
+          Grade more papers
         </button>
       </div>
     </div>

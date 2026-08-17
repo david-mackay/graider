@@ -13,7 +13,7 @@ export const PRO_ANNUAL_PRICE_LABEL = "$239.99/yr";
 export const PRO_ANNUAL_SAVINGS_LABEL = "Save ~20%";
 
 export const FREE_TIER_CLASS_LIMIT = 1;
-export const FREE_TIER_MONTHLY_GRADE_LIMIT = 20;
+export const FREE_TIER_MONTHLY_GRADE_LIMIT = 3;
 
 export type SubscriptionTier = "free" | "pro";
 

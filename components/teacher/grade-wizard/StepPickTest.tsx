@@ -108,7 +108,7 @@ export default function StepPickTest({ onSelect }: StepPickTestProps) {
           <div>
             <h3 className="font-display text-lg font-semibold text-ink">The desk is clear</h3>
             <p className="mt-1 text-sm text-ink-soft">
-              Create a class and a test first, then come back to grade a stack of papers.
+              Create a class and a test first, then come back to grade papers.
             </p>
           </div>
           <Link href="/t" className={btnPrimary}>

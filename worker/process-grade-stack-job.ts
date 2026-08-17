@@ -57,7 +57,7 @@ function isStudentFirst(input: ReturnType<typeof getPreviewInput>): boolean {
 export async function processStackPreviewJob(data: GradeStackQueueJobData) {
   const row = await findJobById(data.jobId);
   if (!row) {
-    throw new Error(`Grade stack job not found: ${data.jobId}`);
+    throw new Error(`Grading job not found: ${data.jobId}`);
   }
 
   await incrementAttemptCount(data.jobId);
@@ -149,7 +149,7 @@ export async function processStackPreviewJob(data: GradeStackQueueJobData) {
 export async function processStackCommitJob(data: GradeStackQueueJobData) {
   const row = await findJobById(data.jobId);
   if (!row) {
-    throw new Error(`Grade stack job not found: ${data.jobId}`);
+    throw new Error(`Grading job not found: ${data.jobId}`);
   }
 
   await incrementAttemptCount(data.jobId);

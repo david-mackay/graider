@@ -113,7 +113,7 @@ export function useStackGrade(): UseStackGradeReturn {
         setAssignments(buildInitialAssignments(nextPreview));
         setState("reviewing");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to preview stack.";
+        const message = error instanceof Error ? error.message : "Failed to preview these papers.";
         setErrorMessage(message);
         setState("uploadStack");
       }
@@ -182,7 +182,7 @@ export function useStackGrade(): UseStackGradeReturn {
       setResults({ results: payload.results });
       setState("results");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to grade stack.";
+      const message = error instanceof Error ? error.message : "Failed to grade these papers.";
       setErrorMessage(message);
       setState("reviewing");
     }

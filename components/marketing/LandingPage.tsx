@@ -49,12 +49,12 @@ const STEPS = [
   {
     n: "02",
     title: "Grade against your rubric",
-    note: "your standards, not AI vibes",
-    desc: "Marks and feedback come from the key and rubric you provide. This is not an LLM freestyling opinions about student work.",
+    note: "your standards, not a chatbot",
+    desc: "Marks and feedback come from the key and rubric you provide — not a chatbot's opinion of the work.",
   },
   {
     n: "03",
-    title: "Snap the stack",
+    title: "Photograph the papers",
     note: "camera or photo library",
     desc: "Photograph the pile. Graider matches pages to students on your roster. You confirm once, then it grades the lot.",
   },
@@ -78,10 +78,10 @@ export default function LandingPage() {
               For teachers who grade by hand
             </p>
             <h1 className="mt-4 font-display text-5xl font-semibold leading-[1.05] tracking-tight text-ink sm:text-6xl">
-              The stack grades itself.
+              The papers grade themselves.
             </h1>
             <p className="mx-auto mt-6 max-w-md text-lg leading-relaxed text-ink-soft lg:mx-0">
-              Upload your test and answer key, photograph the stack, and get
+              Upload your test and answer key, photograph the papers, and get
               marks against <em className="not-italic font-semibold text-ink">your</em> rubric —
               then hand back a PDF or email with feedback you control.
             </p>
@@ -123,7 +123,7 @@ export default function LandingPage() {
             How it works
           </p>
           <h2 className="mx-auto mt-4 max-w-2xl text-center font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Your key. Your stack. Their marked papers — tonight.
+            Your key. Their papers — marked tonight.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-center text-base leading-relaxed text-ink-soft">
             Built for teachers who already know how they want work marked, and just need the Sunday pile gone.
@@ -145,7 +145,7 @@ export default function LandingPage() {
 
       <section className="bg-ink">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
-          <p className="font-hand text-2xl text-gold">Sunday evening, 7pm. A stack of 28 papers.</p>
+          <p className="font-hand text-2xl text-gold">Sunday evening, 7pm. 28 papers on the desk.</p>
           <h2 className="mt-4 font-display text-4xl font-semibold tracking-tight text-paper">
             Done before your coffee is.
           </h2>

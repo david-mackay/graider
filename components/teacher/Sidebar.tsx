@@ -44,7 +44,7 @@ export default function TeacherSidebar({
           className="group flex w-full items-center justify-center gap-2 rounded-full bg-pen px-3 py-2.5 text-sm font-bold text-white shadow-paper transition-all duration-150 hover:bg-pen-deep active:scale-[0.97]"
         >
           <IconPen className="h-4 w-4 flex-shrink-0" />
-          <span>Grade a stack</span>
+          <span>Grade papers</span>
         </Link>
       </div>
       <div className="p-4 border-b border-line-soft">

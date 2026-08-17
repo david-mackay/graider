@@ -94,7 +94,7 @@ export async function assertCanStartStackGrade(teacherId: string): Promise<Subsc
   ) {
     throw new SubscriptionLimitError(
       "GRADE_LIMIT",
-      `Free plan includes ${summary.gradeLimit} stack grades per month. Upgrade to Pro for unlimited grading.`,
+      `Free plan includes ${summary.gradeLimit} tests graded per month. Upgrade to Pro for unlimited grading.`,
     );
   }
   return summary;

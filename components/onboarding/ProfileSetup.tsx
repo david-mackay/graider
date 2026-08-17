@@ -172,7 +172,7 @@ export default function ProfileSetup({
             ) : (
               <FormField label="I am a…">
                 <div className="grid grid-cols-2 gap-3">
-                  {roleOption("teacher", "Teacher", "I grade the stacks")}
+                  {roleOption("teacher", "Teacher", "I grade tests and exams")}
                   {roleOption("student", "Student", "I take the tests")}
                 </div>
               </FormField>

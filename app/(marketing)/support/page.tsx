@@ -34,7 +34,7 @@ export default function SupportPage() {
       <LegalSection title="Common topics">
         <ul className="list-disc space-y-2 pl-5">
           <li>Sign-in with email, Google, or Apple</li>
-          <li>Camera / photo upload for stack grading</li>
+          <li>Camera / photo upload for grading papers</li>
           <li>Answer keys, marks, and feedback that look wrong</li>
           <li>Saving an onboarding class to your account</li>
           <li>Subscriptions, restore purchases, and billing</li>

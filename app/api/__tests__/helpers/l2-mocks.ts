@@ -24,7 +24,7 @@ export const l2Stubs = {
     classesUsed: 0,
     classesLimit: 3,
     stackGradesUsed: 0,
-    stackGradesLimit: 20,
+    stackGradesLimit: 3,
   } as unknown,
   deletedUserIds: [] as string[],
   jobsById: new Map<string, { id: string; teacherId: string; status: string; classId?: string | null }>(),

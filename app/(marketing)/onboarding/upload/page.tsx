@@ -407,7 +407,7 @@ export default function OnboardingUploadPage() {
           Add each student and their paper.
         </h1>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-ink-soft">
-          Collect the whole stack first. Tap any student to edit. We&rsquo;ll grade everyone when
+          Collect all the papers first. Tap any student to edit. We&rsquo;ll grade everyone when
           you&rsquo;re ready.
         </p>
       </div>

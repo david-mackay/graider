@@ -1,13 +1,13 @@
 # Graider subscriptions (RevenueCat)
 
-Freemium stack grading with a single **`pro`** entitlement across iOS (App Store IAP) and web (RevenueCat Billing via Stripe).
+Freemium paper grading with a single **`pro`** entitlement across iOS (App Store IAP) and web (RevenueCat Billing via Stripe).
 
 ## Tiers & pricing
 
 | Tier | Price | Limits |
 |------|-------|--------|
-| Free | $0 | 1 owned class, 20 completed stack grades / calendar month |
-| Pro monthly | **$24.99 / month** | Unlimited classes + stack grades |
+| Free | $0 | 1 owned class, 3 tests graded / calendar month |
+| Pro monthly | **$24.99 / month** | Unlimited classes + tests graded |
 | Pro annual | **$239.99 / year** (~20% vs monthly) | Same as monthly |
 
 Pre-auth onboarding sample grade is **not** gated.

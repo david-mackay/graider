@@ -243,7 +243,7 @@ export default function GradeWizard() {
         subtitle={
           activeIsStudent
             ? "Pick a student, add their pages, and send each one — then review and grade."
-            : "Upload photos of a mixed stack; we'll read each page, match it to a student, and grade in one pass."
+            : "Upload a whole class set at once. We'll match each page to a student and grade in one pass."
         }
       />
 
@@ -300,7 +300,7 @@ export default function GradeWizard() {
                     Have a pile already sorted together?
                   </p>
                   <p className="mt-0.5 text-sm text-ink">
-                    Upload a mixed stack and we&apos;ll match pages to students.
+                    Upload the class set and we&apos;ll match pages to students.
                   </p>
                 </div>
                 <button
@@ -308,7 +308,7 @@ export default function GradeWizard() {
                   onClick={switchToStack}
                   className={btnSecondary}
                 >
-                  Upload a mixed stack instead
+                  Upload the class set instead
                 </button>
               </Card>
             </div>
@@ -424,7 +424,7 @@ export default function GradeWizard() {
               <Card className="flex flex-wrap items-center justify-between gap-3 bg-cream/60">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
-                    Mixed stack mode
+                    Class set
                   </p>
                   <p className="mt-0.5 text-sm text-ink">
                     Upload every page in one batch and we&apos;ll match names to students.
