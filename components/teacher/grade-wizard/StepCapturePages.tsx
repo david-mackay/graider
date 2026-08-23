@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import { Card, btnSecondary } from "@/components/shared/ui";
 import PageStagingGrid from "@/components/shared/PageStagingGrid";
+import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import CopyableError from "@/components/shared/CopyableError";
 import SendStopButton from "@/components/teacher/grade-wizard/SendStopButton";
+import type { DocumentParsePreset } from "@/lib/parse-presets";
 import { MAX_PAGES_PER_STUDENT, type StudentSendStatus } from "@/lib/student-grade";
 
 type StepCapturePagesProps = {
@@ -19,6 +21,8 @@ type StepCapturePagesProps = {
   pageCount: number;
   sendStatus: StudentSendStatus;
   sendError: string | null;
+  parsePreset: DocumentParsePreset;
+  onParsePresetChange: (preset: DocumentParsePreset) => void;
   errorMessage: string;
 };
 
@@ -33,6 +37,8 @@ export default function StepCapturePages({
   pageCount,
   sendStatus,
   sendError,
+  parsePreset,
+  onParsePresetChange,
   errorMessage,
 }: StepCapturePagesProps) {
   const [localError, setLocalError] = useState("");
@@ -63,6 +69,14 @@ export default function StepCapturePages({
             {pageCount} / {MAX_PAGES_PER_STUDENT} pages
           </span>
         </div>
+
+        <ParsePresetPicker
+          surface="student_ocr"
+          value={parsePreset}
+          onChange={onParsePresetChange}
+          disabled={isSending}
+          className="mb-4"
+        />
 
         <PageStagingGrid
           initialFiles={seed}

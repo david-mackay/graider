@@ -1,4 +1,5 @@
 import type { StackPagePreview } from "@/lib/types";
+import { defaultPresetForSurface, type DocumentParsePreset } from "@/lib/parse-presets";
 
 export const MAX_PAGES_PER_STUDENT = 15;
 export const MAX_STUDENTS_PER_SESSION = 10;
@@ -15,6 +16,8 @@ export type StudentBucket = {
   previewJobId: string | null;
   /** Preview pages for this student only (local pageIndex 0..n-1 from the job). */
   previewPages: StackPagePreview[];
+  /** How this student's pages should be parsed. Independent of other students. */
+  parsePreset: DocumentParsePreset;
 };
 
 export function createEmptyBucket(studentId: string, studentName: string): StudentBucket {
@@ -26,6 +29,7 @@ export function createEmptyBucket(studentId: string, studentName: string): Stude
     sendError: null,
     previewJobId: null,
     previewPages: [],
+    parsePreset: defaultPresetForSurface("grade_stack"),
   };
 }
 

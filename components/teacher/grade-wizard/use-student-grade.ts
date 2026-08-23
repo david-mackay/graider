@@ -72,7 +72,7 @@ export type UseStudentGradeReturn = {
     removeBucket: (studentId: string) => void;
     resumeStudent: (studentId: string) => void;
     startAddStudent: () => void;
-    setParsePreset: (preset: DocumentParsePreset) => void;
+    setParsePreset: (preset: DocumentParsePreset, studentId?: string) => void;
     setOcrAnswers: (pageIndex: number, answers: OcrAnswer[]) => void;
     sendStudent: (studentId: string) => Promise<void>;
     cancelSend: (studentId: string) => Promise<void>;
@@ -163,9 +163,13 @@ export function useStudentGrade(): UseStudentGradeReturn {
   const isBusy = state === "grading" || sendingStudentId !== null;
   const readyCount = buckets.filter((b) => b.sendStatus === "ready").length;
 
-  const setParsePreset = useCallback((preset: DocumentParsePreset) => {
+  const setParsePreset = useCallback((preset: DocumentParsePreset, studentId?: string) => {
+    const targetId = studentId ?? activeStudentId;
+    if (targetId) {
+      setBuckets((prev) => patchBucket(prev, targetId, { parsePreset: preset }));
+    }
     setParsePresetState(preset);
-  }, []);
+  }, [activeStudentId]);
 
   const sessionStudents = useMemo(() => {
     return buckets
@@ -369,6 +373,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
         const studentPageAssignments = bucket.pages.map((_, pageIndex) => ({
           pageIndex,
           studentId,
+          parsePreset: bucket.parsePreset,
         }));
 
         let created: { jobId: string };
@@ -391,7 +396,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
                 classId: selectedTest.class_id,
                 idempotencyKey,
                 gradingMode: "student_first",
-                parsePreset,
+                parsePreset: bucket.parsePreset,
                 studentPageAssignments,
                 storagePaths: uploaded.storagePaths,
                 imageMeta: uploaded.imageMeta,
@@ -411,7 +416,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
           formData.append("classId", selectedTest.class_id);
           formData.append("idempotencyKey", idempotencyKey);
           formData.append("gradingMode", "student_first");
-          formData.append("parsePreset", parsePreset);
+          formData.append("parsePreset", bucket.parsePreset);
           formData.append("studentPageAssignments", JSON.stringify(studentPageAssignments));
           for (const file of bucket.pages) {
             formData.append("images", file);
@@ -482,7 +487,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
         abortByStudentRef.current.delete(studentId);
       }
     },
-    [parsePreset, rebuildMergedPreview, selectedTest],
+    [rebuildMergedPreview, selectedTest],
   );
 
   const openReview = useCallback(() => {

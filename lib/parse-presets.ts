@@ -68,12 +68,24 @@ export function defaultPresetForSurface(surface: ParseSurface): DocumentParsePre
     case "test_import":
       return "typed_pdf";
     case "answer_key_photo":
+      return "scanned_or_photo";
     case "student_ocr":
     case "grade_stack":
-      return "circled_mcq";
+      return "handwritten_open";
     default:
       return "typed_pdf";
   }
+}
+
+const MCQ_PARSE_PRESETS = new Set<DocumentParsePreset>(["mcq_letter_key", "circled_mcq"]);
+
+const STUDENT_OCR_SURFACES = new Set<ParseSurface>(["student_ocr", "grade_stack"]);
+
+export function presetsForSurface(surface: ParseSurface): ParsePresetOption[] {
+  if (STUDENT_OCR_SURFACES.has(surface)) {
+    return PARSE_PRESET_OPTIONS.filter((option) => !MCQ_PARSE_PRESETS.has(option.id));
+  }
+  return PARSE_PRESET_OPTIONS.filter((option) => option.id !== "circled_mcq");
 }
 
 /** Coerce FormData / job payload values; unknown → surface default. */
@@ -81,11 +93,19 @@ export function coerceParsePreset(
   raw: unknown,
   surface: ParseSurface,
 ): DocumentParsePreset {
-  if (isDocumentParsePreset(raw)) return raw;
-  if (typeof raw === "string" && isDocumentParsePreset(raw.trim())) {
-    return raw.trim() as DocumentParsePreset;
+  let resolved: DocumentParsePreset;
+  if (isDocumentParsePreset(raw)) resolved = raw;
+  else if (typeof raw === "string" && isDocumentParsePreset(raw.trim())) {
+    resolved = raw.trim() as DocumentParsePreset;
+  } else {
+    resolved = defaultPresetForSurface(surface);
   }
-  return defaultPresetForSurface(surface);
+  // Circled/bubbled MCQ is not reliable in Reducto yet, and picking it for
+  // handwritten papers splits “choose N of M” items into fake extra questions.
+  if (STUDENT_OCR_SURFACES.has(surface) && MCQ_PARSE_PRESETS.has(resolved)) {
+    return defaultPresetForSurface(surface);
+  }
+  return resolved;
 }
 
 export type ReductoParseMapping = {

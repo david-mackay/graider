@@ -43,7 +43,13 @@ function parseStudentPageAssignments(raw: unknown): StudentPageAssignment[] | un
     const record = entry as Record<string, unknown>;
     if (typeof record.pageIndex !== "number" || !Number.isFinite(record.pageIndex)) return undefined;
     if (typeof record.studentId !== "string" || !record.studentId.trim()) return undefined;
-    assignments.push({ pageIndex: record.pageIndex, studentId: record.studentId.trim() });
+    assignments.push({
+      pageIndex: record.pageIndex,
+      studentId: record.studentId.trim(),
+      ...(typeof record.parsePreset === "string" && record.parsePreset.trim()
+        ? { parsePreset: record.parsePreset.trim() }
+        : {}),
+    });
   }
   return assignments.length > 0 ? assignments : undefined;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  PARSE_PRESET_OPTIONS,
+  presetsForSurface,
   type DocumentParsePreset,
   type ParseSurface,
 } from "@/lib/parse-presets";
@@ -16,11 +16,13 @@ type ParsePresetPickerProps = {
 };
 
 export default function ParsePresetPicker({
+  surface,
   value,
   onChange,
   disabled = false,
   className = "",
 }: ParsePresetPickerProps) {
+  const options = presetsForSurface(surface);
   return (
     <div className={className}>
       <label className="block text-xs font-semibold uppercase tracking-wide text-ink-faint">
@@ -33,7 +35,7 @@ export default function ParsePresetPicker({
         className={`${inputClass} mt-1.5`}
         aria-label="Document type for parsing"
       >
-        {PARSE_PRESET_OPTIONS.map((option) => (
+        {options.map((option) => (
           <option key={option.id} value={option.id}>
             {option.label}
           </option>

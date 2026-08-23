@@ -6,6 +6,7 @@ import {
   type DocumentParsePreset,
 } from "@/lib/parse-presets";
 import type { OcrAnswer, OcrPage, ParsedImportQuestion } from "@/lib/types";
+import { citedArray, citedNumber, citedString, minConfidence, unwrapCitedLeaf } from "@/lib/reducto-confidence";
 
 export type { DocumentParsePreset } from "@/lib/parse-presets";
 export type ImagePayload = {
@@ -262,6 +263,10 @@ async function extractWithSchema(params: {
       array_extract: true,
       include_images: mapping.includeImages,
       deep_extract: mapping.deepExtract,
+      citations: {
+        enabled: true,
+        numerical_confidence: true,
+      },
     },
   });
 
@@ -314,10 +319,7 @@ export async function extractTestFromDocument(
     systemPrompt: TEST_PAPER_SYSTEM_PROMPT,
     preset: coerceParsePreset(preset, "test_import"),
   });
-  const title =
-    typeof data.title === "string" && data.title.trim()
-      ? data.title.trim()
-      : "Imported test";
+  const title = citedString(data.title).text || "Imported test";
   const questions = normalizeParsedQuestions(data.questions);
   if (questions.length === 0) {
     throw new Error("No questions found in the test PDF.");
@@ -451,22 +453,23 @@ function imagesToUploads(images: ImagePayload[]): ReductoUploadInput[] {
 function coerceOcrAnswer(entry: unknown): OcrAnswer | null {
   if (typeof entry !== "object" || entry === null) return null;
   const record = entry as Record<string, unknown>;
-  const question = typeof record.question === "string" ? record.question.trim() : "";
-  const answer = typeof record.answer === "string" ? record.answer.trim() : "";
-  if (!question && !answer) return null;
-  const rawIndex = record.question_index;
-  const questionIndex =
-    typeof rawIndex === "number" && Number.isFinite(rawIndex) ? rawIndex : null;
+  const question = citedString(record.question);
+  const answer = citedString(record.answer);
+  if (!question.text && !answer.text) return null;
+  const indexLeaf = citedNumber(record.question_index);
   return {
-    question,
-    answer,
-    question_index: questionIndex,
+    question: question.text,
+    answer: answer.text,
+    question_index: indexLeaf.value,
+    parse_confidence: minConfidence(question.parseConfidence, answer.parseConfidence),
+    extract_confidence: minConfidence(question.extractConfidence, answer.extractConfidence),
+    needs_review: question.needsReview || answer.needsReview || indexLeaf.needsReview,
   };
 }
 
 function coerceOcrAnswers(raw: unknown): OcrAnswer[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
+  const list = citedArray(raw);
+  return list
     .map((entry) => coerceOcrAnswer(entry))
     .filter((entry): entry is OcrAnswer => entry !== null);
 }
@@ -482,7 +485,7 @@ function clampConfidence(value: unknown): number {
 /** Flat Q/A extraction for a single attempt / onboarding sample grade. */
 export async function extractHandwrittenAnswers(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrAnswer[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "student_ocr");
@@ -502,7 +505,7 @@ export async function extractHandwrittenAnswers(
  */
 export async function extractHandwrittenStack(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "grade_stack");
@@ -519,16 +522,23 @@ export async function extractHandwrittenStack(
     preset: resolved,
   });
 
-  const pageEntries = Array.isArray(data.pages) ? data.pages : [];
+  const pageEntries = citedArray(data.pages);
   return images.map((_image, index): OcrPage => {
     const candidate = pageEntries[index];
     if (typeof candidate !== "object" || candidate === null) {
       return { pageIndex: index, studentNameGuess: "", confidence: 0, answers: [] };
     }
     const record = candidate as Record<string, unknown>;
-    const studentNameGuess =
-      typeof record.studentName === "string" ? record.studentName.trim() : "";
-    const confidence = studentNameGuess ? clampConfidence(record.confidence) : 0;
+    const studentName = citedString(record.studentName);
+    const nameConfidence = unwrapCitedLeaf(record.confidence);
+    const studentNameGuess = studentName.text;
+    const confidence = studentNameGuess
+      ? clampConfidence(
+          nameConfidence.value ??
+            minConfidence(studentName.parseConfidence, studentName.extractConfidence) ??
+            0,
+        )
+      : 0;
     return {
       pageIndex: index,
       studentNameGuess,
@@ -542,7 +552,7 @@ export async function extractHandwrittenStack(
 export async function extractHandwrittenStudentBucket(
   images: ImagePayload[],
   globalPageIndices: number[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "grade_stack");
@@ -559,7 +569,7 @@ export async function extractHandwrittenStudentBucket(
     preset: resolved,
   });
 
-  const pageEntries = Array.isArray(data.pages) ? data.pages : [];
+  const pageEntries = citedArray(data.pages);
   return images.map((_image, index): OcrPage => {
     const globalIndex = globalPageIndices[index] ?? index;
     const candidate = pageEntries[index];
@@ -579,23 +589,29 @@ export async function extractHandwrittenStudentBucket(
 /** One Reducto extract per student bucket; skips name OCR. */
 export async function extractStudentFirstPreview(
   images: ImagePayload[],
-  assignments: { pageIndex: number; studentId: string }[],
-  preset: DocumentParsePreset = "circled_mcq",
+  assignments: { pageIndex: number; studentId: string; parsePreset?: string }[],
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
-  const resolved = coerceParsePreset(preset, "grade_stack");
+  const fallback = coerceParsePreset(preset, "grade_stack");
 
-  const byStudent = new Map<string, number[]>();
+  const byStudent = new Map<string, { pageIndices: number[]; parsePreset: DocumentParsePreset }>();
   for (const assignment of [...assignments].sort((a, b) => a.pageIndex - b.pageIndex)) {
-    const list = byStudent.get(assignment.studentId) ?? [];
-    list.push(assignment.pageIndex);
-    byStudent.set(assignment.studentId, list);
+    const existing = byStudent.get(assignment.studentId);
+    if (existing) {
+      existing.pageIndices.push(assignment.pageIndex);
+      continue;
+    }
+    byStudent.set(assignment.studentId, {
+      pageIndices: [assignment.pageIndex],
+      parsePreset: coerceParsePreset(assignment.parsePreset ?? fallback, "grade_stack"),
+    });
   }
 
   const pageResults = new Map<number, OcrPage>();
-  for (const pageIndices of byStudent.values()) {
+  for (const { pageIndices, parsePreset } of byStudent.values()) {
     const studentImages = pageIndices.map((index) => images[index]).filter(Boolean);
-    const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices, resolved);
+    const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices, parsePreset);
     for (const page of pages) {
       pageResults.set(page.pageIndex, page);
     }
@@ -614,7 +630,7 @@ export async function extractStudentFirstPreview(
 /** Discover test title + questions from photographed student papers. */
 export async function parseTestFromStackImages(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
   if (images.length === 0) {
     throw new Error("At least one image is required to detect a test.");
@@ -636,10 +652,7 @@ export async function parseTestFromStackImages(
       "Extract every question — do not truncate.",
     preset: resolved,
   });
-  const title =
-    typeof data.title === "string" && data.title.trim()
-      ? data.title.trim()
-      : "Stack graded test";
+  const title = citedString(data.title).text || "Stack graded test";
   const questions = normalizeParsedQuestions(data.questions);
   if (questions.length === 0) {
     throw new Error(
