@@ -11,8 +11,7 @@ import { totalPageCount } from "@/lib/student-grade";
 type StepSessionSummaryProps = {
   buckets: StudentBucket[];
   testTitle: string;
-  parsePreset: DocumentParsePreset;
-  onParsePresetChange: (preset: DocumentParsePreset) => void;
+  onParsePresetChange: (preset: DocumentParsePreset, studentId: string) => void;
   onAddStudent: () => void;
   onResumeStudent: (studentId: string) => void;
   onRemoveStudent: (studentId: string) => void;
@@ -28,7 +27,6 @@ type StepSessionSummaryProps = {
 export default function StepSessionSummary({
   buckets,
   testTitle,
-  parsePreset,
   onParsePresetChange,
   onAddStudent,
   onResumeStudent,
@@ -55,17 +53,9 @@ export default function StepSessionSummary({
           {readyCount > 0 ? ` · ${readyCount} ready` : ""}
         </p>
         <p className="mt-2 text-xs text-ink-faint">
-          Send each student one at a time so uploads stay small. Review when you&apos;re ready.
+          Send each student one at a time so uploads stay small. Document type is per student.
+          Review when you&apos;re ready.
         </p>
-      </Card>
-
-      <Card>
-        <ParsePresetPicker
-          surface="grade_stack"
-          value={parsePreset}
-          onChange={onParsePresetChange}
-          disabled={anyoneSending}
-        />
       </Card>
 
       {errorMessage ? <CopyableError message={errorMessage} /> : null}
@@ -75,7 +65,7 @@ export default function StepSessionSummary({
           {captured.map((bucket) => (
             <li
               key={bucket.studentId}
-              className="flex items-center gap-3 rounded-2xl border border-line bg-paper p-3 shadow-paper"
+              className="flex flex-col gap-3 rounded-2xl border border-line bg-paper p-3 shadow-paper sm:flex-row sm:items-center"
             >
               <button
                 type="button"
@@ -105,6 +95,13 @@ export default function StepSessionSummary({
                   ) : null}
                 </div>
               </button>
+              <ParsePresetPicker
+                surface="student_ocr"
+                value={bucket.parsePreset}
+                onChange={(preset) => onParsePresetChange(preset, bucket.studentId)}
+                disabled={bucket.sendStatus === "sending"}
+                className="sm:w-52"
+              />
               <SendStopButton
                 status={bucket.sendStatus}
                 size="md"

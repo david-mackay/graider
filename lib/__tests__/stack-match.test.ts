@@ -37,6 +37,56 @@ describe("stack-grading matchOcrAnswersToQuestions", () => {
     assert.equal(rows.length, 2);
   });
 
+  it("merges multiple OCR rows that share a printed question number", () => {
+    const questions = [
+      { questionId: "q1", prompt: "Define any three of the following" },
+      { questionId: "q2", prompt: "List two ways to prevent exposure" },
+    ];
+    const rows = matchOcrAnswersToQuestions(
+      [
+        { question: "abandonment", answer: "leaving a patient", question_index: 1 },
+        { question: "assault", answer: "threat of harm", question_index: 1 },
+        { question: "battery", answer: "unlawful touching", question_index: 1 },
+        { question: "Q2", answer: "PPE and hand washing", question_index: 2 },
+      ],
+      questions,
+    );
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].questionId, "q1");
+    assert.match(rows[0].studentAnswer, /leaving a patient/);
+    assert.match(rows[0].studentAnswer, /unlawful touching/);
+    assert.equal(rows[1].questionId, "q2");
+    assert.equal(rows[1].studentAnswer, "PPE and hand washing");
+  });
+
+  it("does not treat same-number fragments as later questions", () => {
+    const questions = [
+      { questionId: "q1", prompt: "Define any three of the following" },
+      { questionId: "q2", prompt: "List two ways to prevent exposure" },
+      { questionId: "q3", prompt: "What are the four levels of EMS Training" },
+      { questionId: "q4", prompt: "List any 4 responsibilities of the EMT" },
+    ];
+    const rows = matchOcrAnswersToQuestions(
+      [
+        { question: "abandonment", answer: "leaving a patient", question_index: 1 },
+        { question: "assault", answer: "threat of harm", question_index: 1 },
+        { question: "battery", answer: "unlawful touching", question_index: 1 },
+        { question: "libel", answer: "written defamation", question_index: 1 },
+        { question: "unclear", answer: "PPE and hand washing", question_index: 2 },
+        { question: "unclear", answer: "EMR EMT AEMT Paramedic", question_index: 3 },
+        { question: "unclear", answer: "scene safety patient care", question_index: 4 },
+      ],
+      questions,
+    );
+    assert.equal(rows.length, 4);
+    assert.equal(rows[0].questionId, "q1");
+    assert.match(rows[0].studentAnswer, /leaving a patient/);
+    assert.match(rows[0].studentAnswer, /written defamation/);
+    assert.equal(rows[1].studentAnswer, "PPE and hand washing");
+    assert.equal(rows[2].studentAnswer, "EMR EMT AEMT Paramedic");
+    assert.equal(rows[3].studentAnswer, "scene safety patient care");
+  });
+
   it("normalizeQuestion strips punctuation", () => {
     assert.equal(normalizeQuestion(" Hello, World! "), "hello world");
   });

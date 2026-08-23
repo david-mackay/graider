@@ -485,7 +485,7 @@ function clampConfidence(value: unknown): number {
 /** Flat Q/A extraction for a single attempt / onboarding sample grade. */
 export async function extractHandwrittenAnswers(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrAnswer[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "student_ocr");
@@ -505,7 +505,7 @@ export async function extractHandwrittenAnswers(
  */
 export async function extractHandwrittenStack(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "grade_stack");
@@ -552,7 +552,7 @@ export async function extractHandwrittenStack(
 export async function extractHandwrittenStudentBucket(
   images: ImagePayload[],
   globalPageIndices: number[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "grade_stack");
@@ -589,23 +589,29 @@ export async function extractHandwrittenStudentBucket(
 /** One Reducto extract per student bucket; skips name OCR. */
 export async function extractStudentFirstPreview(
   images: ImagePayload[],
-  assignments: { pageIndex: number; studentId: string }[],
-  preset: DocumentParsePreset = "circled_mcq",
+  assignments: { pageIndex: number; studentId: string; parsePreset?: string }[],
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
-  const resolved = coerceParsePreset(preset, "grade_stack");
+  const fallback = coerceParsePreset(preset, "grade_stack");
 
-  const byStudent = new Map<string, number[]>();
+  const byStudent = new Map<string, { pageIndices: number[]; parsePreset: DocumentParsePreset }>();
   for (const assignment of [...assignments].sort((a, b) => a.pageIndex - b.pageIndex)) {
-    const list = byStudent.get(assignment.studentId) ?? [];
-    list.push(assignment.pageIndex);
-    byStudent.set(assignment.studentId, list);
+    const existing = byStudent.get(assignment.studentId);
+    if (existing) {
+      existing.pageIndices.push(assignment.pageIndex);
+      continue;
+    }
+    byStudent.set(assignment.studentId, {
+      pageIndices: [assignment.pageIndex],
+      parsePreset: coerceParsePreset(assignment.parsePreset ?? fallback, "grade_stack"),
+    });
   }
 
   const pageResults = new Map<number, OcrPage>();
-  for (const pageIndices of byStudent.values()) {
+  for (const { pageIndices, parsePreset } of byStudent.values()) {
     const studentImages = pageIndices.map((index) => images[index]).filter(Boolean);
-    const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices, resolved);
+    const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices, parsePreset);
     for (const page of pages) {
       pageResults.set(page.pageIndex, page);
     }
@@ -624,7 +630,7 @@ export async function extractStudentFirstPreview(
 /** Discover test title + questions from photographed student papers. */
 export async function parseTestFromStackImages(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "circled_mcq",
+  preset: DocumentParsePreset = "handwritten_open",
 ): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
   if (images.length === 0) {
     throw new Error("At least one image is required to detect a test.");

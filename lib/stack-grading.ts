@@ -41,15 +41,82 @@ export function normalizeQuestion(text: string) {
     .trim();
 }
 
+function joinAnswerParts(parts: string[]): string {
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function formatOcrPart(entry: OcrAnswer): string {
+  const question = entry.question.trim();
+  const answer = entry.answer.trim();
+  if (question && answer && !answer.toLowerCase().includes(question.toLowerCase())) {
+    return `${question}: ${answer}`;
+  }
+  return answer || question;
+}
+
+/**
+ * Combine OCR fragments that share a printed question number
+ * (e.g. "define any 3 of 4" split into four Q1 rows) so they grade as one answer.
+ */
+export function mergeOcrAnswersByQuestionNumber(extracted: OcrAnswer[]): OcrAnswer[] {
+  const groups: OcrAnswer[][] = [];
+  const indexToGroup = new Map<number, number>();
+
+  for (const entry of extracted) {
+    const raw = entry.question_index;
+    const index =
+      typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : null;
+    if (index === null) {
+      groups.push([entry]);
+      continue;
+    }
+    const existing = indexToGroup.get(index);
+    if (existing === undefined) {
+      indexToGroup.set(index, groups.length);
+      groups.push([entry]);
+    } else {
+      groups[existing].push(entry);
+    }
+  }
+
+  return groups.map((group) => {
+    if (group.length === 1) return group[0];
+    return {
+      ...group[0],
+      question: group[0].question,
+      answer: joinAnswerParts(group.map(formatOcrPart)),
+      question_index: group[0].question_index,
+      needs_review: group.some((item) => item.needs_review),
+      parse_confidence: minNullable(
+        ...group.map((item) => item.parse_confidence ?? null),
+      ),
+      extract_confidence: minNullable(
+        ...group.map((item) => item.extract_confidence ?? null),
+      ),
+    };
+  });
+}
+
+function minNullable(...values: Array<number | null>): number | null {
+  const nums = values.filter((value): value is number => typeof value === "number");
+  if (nums.length === 0) return null;
+  return Math.min(...nums);
+}
+
 /**
  * Match OCR rows onto test questions.
  * Prefer exact/normalized prompt match; fall back to printed question_index
  * (1-based or 0-based) — critical for MCQ sheets where stems OCR poorly.
+ * Multiple OCR rows for the same question are concatenated, not overwritten.
  */
 export function matchOcrAnswersToQuestions(
   extracted: OcrAnswer[],
   questions: { questionId: string; prompt: string }[],
 ): { questionId: string; studentAnswer: string }[] {
+  const merged = mergeOcrAnswersByQuestionNumber(extracted);
   const byPrompt = new Map<string, string>();
   for (const q of questions) {
     byPrompt.set(normalizeQuestion(q.prompt), q.questionId);
@@ -61,13 +128,19 @@ export function matchOcrAnswersToQuestions(
 
   const tryAdd = (questionId: string | undefined, answer: string) => {
     const trimmed = answer.trim();
-    if (!questionId || !trimmed || used.has(questionId)) return false;
+    if (!questionId || !trimmed) return false;
+    if (used.has(questionId)) {
+      const existing = rows.find((row) => row.questionId === questionId);
+      if (!existing) return false;
+      existing.studentAnswer = joinAnswerParts([existing.studentAnswer, trimmed]);
+      return true;
+    }
     used.add(questionId);
     rows.push({ questionId, studentAnswer: trimmed });
     return true;
   };
 
-  for (const entry of extracted) {
+  for (const entry of merged) {
     if (tryAdd(byPrompt.get(normalizeQuestion(entry.question)), entry.answer)) {
       continue;
     }
@@ -84,9 +157,9 @@ export function matchOcrAnswersToQuestions(
   }
 
   // Positional fallback when counts line up and little matched by prompt/index.
-  if (rows.length === 0 && extracted.length > 0 && extracted.length === questions.length) {
-    for (let i = 0; i < extracted.length; i += 1) {
-      tryAdd(questions[i]?.questionId, extracted[i]?.answer ?? "");
+  if (rows.length === 0 && merged.length > 0 && merged.length === questions.length) {
+    for (let i = 0; i < merged.length; i += 1) {
+      tryAdd(questions[i]?.questionId, merged[i]?.answer ?? "");
     }
   }
 

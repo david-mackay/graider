@@ -210,6 +210,7 @@ export type GradeStackPreviewPayload = {
 export type StudentPageAssignment = {
   pageIndex: number;
   studentId: string;
+  parsePreset?: string;
 };
 
 export type StackTestDiscovery = {
