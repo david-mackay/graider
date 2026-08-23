@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, SectionHeader, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import { IconCheck } from "@/components/shared/icons";
 import { handleJson } from "@/lib/dashboard-client";
@@ -79,6 +79,8 @@ export default function GradeWizard() {
   const [rosterLoading, setRosterLoading] = useState(false);
   const [rosterError, setRosterError] = useState("");
   const [rosterClassId, setRosterClassId] = useState<string | null>(null);
+  const [rosterClassName, setRosterClassName] = useState<string | null>(null);
+  const [addingStudent, setAddingStudent] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
@@ -96,37 +98,44 @@ export default function GradeWizard() {
       ? studentWizard.selectedTest?.class_id ?? null
       : stackWizard.selectedTest?.class_id ?? null;
 
+  const loadRoster = useCallback(async (classId: string) => {
+    setRosterLoading(true);
+    setRosterError("");
+    try {
+      const [rosterPayload, classesPayload] = await Promise.all([
+        handleJson<{ roster: RosterEntry[] }>(
+          await fetch(`/api/classes/${classId}/roster`, { cache: "no-store" }),
+        ),
+        handleJson<{ classes: Array<{ id: string; name: string }> }>(
+          await fetch("/api/classes", { cache: "no-store" }),
+        ),
+      ]);
+      setRoster(rosterPayload.roster ?? []);
+      setRosterClassId(classId);
+      setRosterClassName(classesPayload.classes?.find((cls) => cls.id === classId)?.name ?? null);
+    } catch (error) {
+      setRosterError(error instanceof Error ? error.message : "Failed to load roster.");
+    } finally {
+      setRosterLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!activeClassId) {
       if (roster.length) setRoster([]);
       if (rosterClassId !== null) setRosterClassId(null);
+      if (rosterClassName !== null) setRosterClassName(null);
       return;
     }
     if (rosterClassId === activeClassId) return;
-
     let cancelled = false;
-    async function load(classId: string) {
-      setRosterLoading(true);
-      setRosterError("");
-      try {
-        const payload = await handleJson<{ roster: RosterEntry[] }>(
-          await fetch(`/api/classes/${classId}/roster`, { cache: "no-store" }),
-        );
-        if (cancelled) return;
-        setRoster(payload.roster ?? []);
-        setRosterClassId(classId);
-      } catch (error) {
-        if (cancelled) return;
-        setRosterError(error instanceof Error ? error.message : "Failed to load roster.");
-      } finally {
-        if (!cancelled) setRosterLoading(false);
-      }
-    }
-    void load(activeClassId);
+    void loadRoster(activeClassId).then(() => {
+      if (cancelled) return;
+    });
     return () => {
       cancelled = true;
     };
-  }, [activeClassId, rosterClassId, roster.length]);
+  }, [activeClassId, loadRoster, roster.length, rosterClassId, rosterClassName]);
 
   const rosterNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -208,6 +217,36 @@ export default function GradeWizard() {
   const sessionStudentIds = useMemo(
     () => new Set(buckets.map((b) => b.studentId)),
     [buckets],
+  );
+
+  const handleAddStudent = useCallback(
+    async (fullName: string, email: string) => {
+      const classId = studentTest?.class_id;
+      if (!classId) {
+        throw new Error("Pick a test (and class) before adding a student.");
+      }
+      setAddingStudent(true);
+      try {
+        const payload = await handleJson<{
+          student: { user_id: string; full_name: string | null };
+        }>(
+          await fetch(`/api/classes/${classId}/students`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              full_name: fullName,
+              email: email || undefined,
+            }),
+          }),
+        );
+        const name = payload.student.full_name ?? fullName;
+        studentActions.selectStudent(payload.student.user_id, name);
+        void loadRoster(classId);
+      } finally {
+        setAddingStudent(false);
+      }
+    },
+    [loadRoster, studentActions, studentTest?.class_id],
   );
 
   const activeIsStudent = mode === "student_first";
@@ -340,9 +379,12 @@ export default function GradeWizard() {
               roster={roster}
               rosterLoading={rosterLoading}
               rosterError={rosterError}
+              className={rosterClassName}
               sessionStudentIds={sessionStudentIds}
               onSelect={studentActions.selectStudent}
               onResume={studentActions.resumeStudent}
+              onAddStudent={handleAddStudent}
+              addingStudent={addingStudent}
               onBack={studentActions.back}
             />
           ) : null}

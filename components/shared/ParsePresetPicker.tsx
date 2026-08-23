@@ -21,8 +21,6 @@ export default function ParsePresetPicker({
   disabled = false,
   className = "",
 }: ParsePresetPickerProps) {
-  const selected = PARSE_PRESET_OPTIONS.find((o) => o.id === value) ?? PARSE_PRESET_OPTIONS[0];
-
   return (
     <div className={className}>
       <label className="block text-xs font-semibold uppercase tracking-wide text-ink-faint">
@@ -41,7 +39,6 @@ export default function ParsePresetPicker({
           </option>
         ))}
       </select>
-      <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">{selected?.hint}</p>
     </div>
   );
 }

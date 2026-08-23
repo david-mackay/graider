@@ -11,6 +11,10 @@ import {
   type AssignmentValue,
 } from "@/components/teacher/grade-wizard/use-stack-grade";
 import type { OcrAnswer, RosterEntry, StackPagePreview } from "@/lib/types";
+import {
+  formatPrintedQuestionNumber,
+  parsePrintedQuestionNumber,
+} from "@/lib/question-index";
 
 type StepReviewMatchesProps = {
   pages: StackPagePreview[];
@@ -288,20 +292,12 @@ export default function StepReviewMatches({
                                     <input
                                       type="number"
                                       min={1}
-                                      value={
-                                        answer.question_index != null
-                                          ? answer.question_index + 1
-                                          : ""
+                                      value={formatPrintedQuestionNumber(answer.question_index)}
+                                      onChange={(e) =>
+                                        updateAnswer(page, idx, {
+                                          question_index: parsePrintedQuestionNumber(e.target.value),
+                                        })
                                       }
-                                      onChange={(e) => {
-                                        const raw = e.target.value.trim();
-                                        const parsed = raw === "" ? null : Number(raw);
-                                        const next =
-                                          parsed !== null && Number.isFinite(parsed) && parsed >= 1
-                                            ? parsed - 1
-                                            : null;
-                                        updateAnswer(page, idx, { question_index: next });
-                                      }}
                                       placeholder="e.g. 1"
                                       disabled={isBusy}
                                       className={`${inputClass} mt-1`}

@@ -23,7 +23,6 @@ type PdfImportPanelProps = {
   /** Allow selecting multiple PDFs (e.g. questions + answer key) in one import. */
   multiple?: boolean;
   titleOverride?: string;
-  hintOverride?: string;
 };
 
 type ImportJobResponse = {
@@ -59,11 +58,10 @@ const SURFACES: Record<ContentImportKind, ParseSurface> = {
 function defaultLabels(
   kind: ContentImportKind,
   enriched: boolean,
-): { title: string; hint: string; success: (result?: ImportJobResponse["result"]) => string } {
+): { title: string; success: (result?: ImportJobResponse["result"]) => string } {
   if (kind === "question_bank") {
     return {
       title: "Import from PDF",
-      hint: "Upload an answer key or question bank PDF — including MCQ letter keys. We’ll extract what we can. You can start another upload while one is processing.",
       success: (result) =>
         typeof result?.questionsCreated === "number"
           ? `Imported ${result.questionsCreated} question${result.questionsCreated === 1 ? "" : "s"}.`
@@ -73,7 +71,6 @@ function defaultLabels(
   if (enriched) {
     return {
       title: "Add PDF to this test",
-      hint: "Upload questions, an answer key, or both. We’ll match by question number and fill in missing prompts or answers. Uploads can run in parallel.",
       success: (result) => {
         const updated = result?.questionsUpdated ?? 0;
         const created = result?.questionsCreated ?? 0;
@@ -88,7 +85,6 @@ function defaultLabels(
   }
   return {
     title: "Import test from PDF",
-    hint: "Upload one or more PDFs (questions and/or answer key). We’ll create a draft test and merge overlapping items by question number. You can start another import while one is processing.",
     success: (result) =>
       typeof result?.questionsCreated === "number"
         ? `Test imported with ${result.questionsCreated} question${result.questionsCreated === 1 ? "" : "s"}.`
@@ -116,7 +112,6 @@ export default function PdfImportPanel({
   targetTestId = null,
   multiple = kind === "test",
   titleOverride,
-  hintOverride,
 }: PdfImportPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const surface = SURFACES[kind];
@@ -126,7 +121,6 @@ export default function PdfImportPanel({
   );
   const labels = defaultLabels(kind, Boolean(targetTestId));
   const title = titleOverride ?? labels.title;
-  const hint = hintOverride ?? labels.hint;
 
   function updateImport(clientId: string, patch: Partial<ActiveImport>) {
     setActiveImports((prev) =>
@@ -201,7 +195,6 @@ export default function PdfImportPanel({
   return (
     <Card className="border-dashed border-line bg-cream/40">
       <p className="text-sm font-semibold text-ink">{title}</p>
-      <p className="mt-1 text-xs leading-relaxed text-ink-faint">{hint}</p>
       <ParsePresetPicker
         surface={surface}
         value={parsePreset}
