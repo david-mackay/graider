@@ -120,6 +120,12 @@ export type OcrAnswer = {
   question: string;
   answer: string;
   question_index?: number | null;
+  /** Lowest Reducto parse_confidence (0–1) across question/answer citations. */
+  parse_confidence?: number | null;
+  /** Lowest Reducto extract_confidence (0–1) across question/answer citations. */
+  extract_confidence?: number | null;
+  /** True when Reducto marked the read as low-confidence or ungrounded. */
+  needs_review?: boolean;
 };
 
 export type OcrPage = {
@@ -294,6 +300,9 @@ export type ParsedImportQuestion = {
   choices?: Array<{ key: string; text: string }> | null;
   /** 1-based printed question number when available. */
   question_number?: number | null;
+  parse_confidence?: number | null;
+  extract_confidence?: number | null;
+  needs_review?: boolean;
 };
 
 export type ContentImportResult = {

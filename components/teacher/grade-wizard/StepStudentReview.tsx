@@ -99,6 +99,19 @@ export default function StepStudentReview({
     () => groups.reduce((sum, g) => sum + g.pages.reduce((s, p) => s + p.ocrAnswers.length, 0), 0),
     [groups],
   );
+  const lowConfidenceCount = useMemo(
+    () =>
+      groups.reduce(
+        (sum, g) =>
+          sum +
+          g.pages.reduce(
+            (s, p) => s + p.ocrAnswers.filter((a) => a.needs_review).length,
+            0,
+          ),
+        0,
+      ),
+    [groups],
+  );
 
   function toggle(studentId: string) {
     setExpanded((prev) => {
@@ -111,7 +124,7 @@ export default function StepStudentReview({
 
   function updateAnswer(page: StackPagePreview, index: number, patch: Partial<OcrAnswer>) {
     const next = page.ocrAnswers.map((a, i) =>
-      i === index ? { ...a, ...patch } : a,
+      i === index ? { ...a, ...patch, needs_review: false } : a,
     );
     onOcrAnswersChange(page.pageIndex, next);
   }
@@ -142,6 +155,12 @@ export default function StepStudentReview({
           </div>
           <Badge variant="green">Assigned</Badge>
         </div>
+        {lowConfidenceCount > 0 ? (
+          <p className="mt-3 rounded-xl border border-marigold/40 bg-marigold-wash/60 px-3 py-2 text-sm text-ink">
+            {lowConfidenceCount} answer{lowConfidenceCount === 1 ? "" : "s"} flagged for low parse
+            confidence. Check those first.
+          </p>
+        ) : null}
       </Card>
 
       {emptyGroups.length > 0 ? (
@@ -269,12 +288,20 @@ export default function StepStudentReview({
                                 page.ocrAnswers.map((answer, idx) => (
                                   <div
                                     key={idx}
-                                    className="rounded-lg border border-line bg-paper p-3"
+                                    className={`rounded-lg border bg-paper p-3 ${
+                                      answer.needs_review
+                                        ? "border-marigold/60 bg-marigold-wash/30"
+                                        : "border-line"
+                                    }`}
                                   >
                                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                                       <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
                                         Answer {idx + 1}
                                       </p>
+                                      <div className="flex items-center gap-2">
+                                        {answer.needs_review ? (
+                                          <Badge variant="yellow">Low confidence</Badge>
+                                        ) : null}
                                       <button
                                         type="button"
                                         onClick={() => removeAnswer(page, idx)}
@@ -284,6 +311,7 @@ export default function StepStudentReview({
                                       >
                                         Remove
                                       </button>
+                                      </div>
                                     </div>
 
                                     <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

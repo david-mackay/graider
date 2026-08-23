@@ -1,28 +1,28 @@
 import type { ParsedImportQuestion } from "@/lib/types";
+import { citedArray, citedNumber, citedString, minConfidence, unwrapCitedLeaf } from "@/lib/reducto-confidence";
 
 /** Normalize LLM / Reducto question rows into ParsedImportQuestion. */
 export function normalizeParsedQuestions(raw: unknown): ParsedImportQuestion[] {
-  if (!Array.isArray(raw)) return [];
+  const rows = citedArray(raw);
   const results: ParsedImportQuestion[] = [];
-  for (const entry of raw) {
+  for (const entry of rows) {
     if (typeof entry !== "object" || entry === null) continue;
     const record = entry as Record<string, unknown>;
-    const prompt = typeof record.prompt === "string" ? record.prompt.trim() : "";
-    const correctAnswer =
-      typeof record.correct_answer === "string"
-        ? record.correct_answer.trim()
-        : typeof record.correctAnswer === "string"
-          ? record.correctAnswer.trim()
-          : "";
-    const marksRaw = Number(record.marks);
+    const promptField = citedString(record.prompt);
+    const correctField = citedString(record.correct_answer ?? record.correctAnswer);
+    const prompt = promptField.text;
+    const correctAnswer = correctField.text;
+    const marksLeaf = unwrapCitedLeaf(record.marks);
+    const marksRaw = Number(marksLeaf.value);
     const marks = Number.isFinite(marksRaw) ? Math.max(0, Math.round(marksRaw)) : 1;
-    const topic =
-      typeof record.topic === "string" && record.topic.trim() ? record.topic.trim() : null;
+    const topicField = citedString(record.topic);
+    const topic = topicField.text ? topicField.text : null;
+    const typeLeaf = unwrapCitedLeaf(record.question_type ?? record.questionType);
     const questionType =
-      record.question_type === "mcq" || record.questionType === "mcq" ? "mcq" : "open";
-    const numberRaw = Number(record.question_number ?? record.questionNumber ?? record.number);
+      typeLeaf.value === "mcq" ? "mcq" : "open";
+    const numberLeaf = citedNumber(record.question_number ?? record.questionNumber ?? record.number);
     const questionNumber =
-      Number.isFinite(numberRaw) && numberRaw > 0 ? Math.floor(numberRaw) : null;
+      numberLeaf.value !== null && numberLeaf.value > 0 ? Math.floor(numberLeaf.value) : null;
     const choicesRaw = record.choices;
     let choices: ParsedImportQuestion["choices"] = null;
     if (Array.isArray(choicesRaw) && choicesRaw.length > 0) {
@@ -55,6 +55,16 @@ export function normalizeParsedQuestions(raw: unknown): ParsedImportQuestion[] {
       question_type: resolvedType,
       choices,
       question_number: questionNumber,
+      parse_confidence: minConfidence(promptField.parseConfidence, correctField.parseConfidence),
+      extract_confidence: minConfidence(
+        promptField.extractConfidence,
+        correctField.extractConfidence,
+      ),
+      needs_review:
+        promptField.needsReview ||
+        correctField.needsReview ||
+        marksLeaf.needsReview ||
+        numberLeaf.needsReview,
     });
   }
   return results;
