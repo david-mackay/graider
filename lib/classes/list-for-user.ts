@@ -1,19 +1,17 @@
 import { db } from "@/lib/db";
 import { classes, classMemberships } from "@/drizzle/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { cacheGet, cacheSet } from "@/lib/cache/redis";
+import { getOrSetJson } from "@/lib/cache/json";
+import { CATALOG_CACHE_TTL_SECONDS, classesCacheKey } from "@/lib/cache/keys";
 import { type SchoolClass } from "@/lib/types";
 
-export const CLASSES_CACHE_TTL_SECONDS = 30;
+export { classesCacheKey };
+export const CLASSES_CACHE_TTL_SECONDS = CATALOG_CACHE_TTL_SECONDS;
 
 export type ListedClass = SchoolClass & {
   role_in_class: "teacher" | "student";
   student_count: number;
 };
-
-export function classesCacheKey(userId: string): string {
-  return `classes:user:${userId}`;
-}
 
 async function fetchClassesForUser(userId: string): Promise<ListedClass[]> {
   const studentCounts = db
@@ -66,17 +64,7 @@ async function fetchClassesForUser(userId: string): Promise<ListedClass[]> {
 }
 
 export async function listClassesForUser(userId: string): Promise<ListedClass[]> {
-  const key = classesCacheKey(userId);
-  const cached = await cacheGet(key);
-  if (cached) {
-    try {
-      return JSON.parse(cached) as ListedClass[];
-    } catch {
-      // Fall through to DB on corrupt cache.
-    }
-  }
-
-  const result = await fetchClassesForUser(userId);
-  await cacheSet(key, JSON.stringify(result), CLASSES_CACHE_TTL_SECONDS);
-  return result;
+  return getOrSetJson(classesCacheKey(userId), CLASSES_CACHE_TTL_SECONDS, () =>
+    fetchClassesForUser(userId),
+  );
 }

@@ -21,6 +21,7 @@ import type { GradedAttemptDetail, GradedAttemptQuestion } from "@/lib/dashboard
 
 type RowState = {
   studentAnswer: string;
+  correctAnswer: string;
   marksEarned: string; // keep as string for <input>
   feedback: string;
   saving: boolean;
@@ -50,6 +51,7 @@ function initRows(questions: GradedAttemptQuestion[]): Map<string, RowState> {
   for (const q of questions) {
     map.set(q.question_id, {
       studentAnswer: q.student_answer ?? "",
+      correctAnswer: q.correct_answer ?? "",
       marksEarned: String(q.marks_earned ?? 0),
       feedback: q.feedback ?? "",
       saving: false,
@@ -66,6 +68,7 @@ export default function AttemptGradeEditor({ attempt, onClose, onSaved }: Attemp
   const [totalMarks, setTotalMarks] = useState(attempt.total_marks ?? 0);
   const [maxMarks] = useState(attempt.max_marks ?? 0);
   const [saving, setSaving] = useState(false);
+  const classId = attempt.test_class_id?.trim() ?? "";
   // Track pending auto-saves so the explicit Save button can wait for them.
   const pendingRef = useRef<Set<string>>(new Set());
 
@@ -84,14 +87,35 @@ export default function AttemptGradeEditor({ attempt, onClose, onSaved }: Attemp
     });
   }
 
+  const persistAnswerKey = useCallback(
+    async (questionId: string, correctAnswer: string) => {
+      if (!classId) return;
+      await handleJson(
+        await fetch(`/api/questions/${questionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            class_id: classId,
+            classId,
+            correct_answer: correctAnswer,
+            correctAnswer,
+          }),
+        }),
+      );
+    },
+    [classId],
+  );
+
   // Auto-save: called on blur of any field.
   const autoSave = useCallback(
     async (questionId: string, overrideStudentAnswer?: string) => {
       const row = rows.get(questionId);
       if (!row || (!row.dirty && overrideStudentAnswer === undefined)) return;
 
+      const original = attempt.questions.find((q) => q.question_id === questionId);
+      const keyChanged = row.correctAnswer !== (original?.correct_answer ?? "");
       const studentAnswerChanged = overrideStudentAnswer !== undefined;
-      const body: Record<string, unknown> = studentAnswerChanged
+      const body: Record<string, unknown> = studentAnswerChanged || keyChanged
         ? { studentAnswer: overrideStudentAnswer ?? row.studentAnswer }
         : {
             marksEarned: Number(row.marksEarned) || 0,
@@ -102,6 +126,9 @@ export default function AttemptGradeEditor({ attempt, onClose, onSaved }: Attemp
       pendingRef.current.add(questionId);
 
       try {
+        if (keyChanged) {
+          await persistAnswerKey(questionId, row.correctAnswer);
+        }
         const data = await handleJson<{
           answer: { marks_earned: number; feedback: string; student_answer: string };
           attempt: { total_marks: number; max_marks: number };
@@ -120,13 +147,16 @@ export default function AttemptGradeEditor({ attempt, onClose, onSaved }: Attemp
           studentAnswer: data.answer.student_answer ?? row.studentAnswer,
         });
         setTotalMarks(data.attempt.total_marks);
+        if (keyChanged && original) {
+          original.correct_answer = row.correctAnswer;
+        }
       } catch {
         setRow(questionId, { saving: false, dirty: true });
       } finally {
         pendingRef.current.delete(questionId);
       }
     },
-    [attempt.id, rows],
+    [attempt.id, attempt.questions, persistAnswerKey, rows],
   );
 
   async function handleSaveAll() {
@@ -220,12 +250,25 @@ export default function AttemptGradeEditor({ attempt, onClose, onSaved }: Attemp
                   />
                 </div>
 
-                {/* Correct answer — shown on desktop only */}
-                <div className="hidden sm:block space-y-1.5">
-                  <p className="text-xs font-semibold text-moss-deep">Correct answer</p>
-                  <div className="min-h-[4rem] rounded-xl border border-moss/30 bg-moss-wash/40 px-3.5 py-2.5 text-sm leading-relaxed text-moss-deep">
-                    {q.correct_answer ?? <span className="italic text-ink-faint">—</span>}
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-moss-deep">Answer key</label>
+                  <textarea
+                    className={`${inputClass} min-h-[4rem] resize-y border-moss/30 bg-moss-wash/30`}
+                    value={row.correctAnswer}
+                    onChange={(e) => setRow(q.question_id, { correctAnswer: e.target.value, dirty: true })}
+                    onBlur={() => {
+                      const currentRow = rows.get(q.question_id);
+                      if (currentRow && currentRow.correctAnswer !== (q.correct_answer ?? "")) {
+                        void autoSave(q.question_id, currentRow.studentAnswer);
+                      }
+                    }}
+                    disabled={row.saving || !classId}
+                    placeholder="Expected answer for this question"
+                    aria-label={`Answer key for question ${idx + 1}`}
+                  />
+                  <p className="text-[11px] text-ink-faint">
+                    Shared across this test. Saving it re-grades this student against the new key.
+                  </p>
                 </div>
               </div>
 

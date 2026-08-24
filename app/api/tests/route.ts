@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tests, testQuestions, questionBank, classMemberships, testAttempts } from "@/drizzle/schema";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { tests, testQuestions, questionBank, testAttempts } from "@/drizzle/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { TestSummary } from "@/lib/types";
-import { isTestAvailableNow, mapTestScheduleToApi, normalizeTestStatus } from "@/lib/test-availability";
+import { normalizeTestStatus } from "@/lib/test-availability";
+import { listClassesForUser } from "@/lib/classes/list-for-user";
+import { listTestsForClass, refreshTestAvailability } from "@/lib/tests/list-for-class";
+import { invalidateClassCatalog } from "@/lib/classes/invalidate";
 
 export async function GET(request: Request) {
   try {
@@ -12,27 +15,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const classFilter = searchParams.get("classId");
 
-    const memberships = await db
-      .select({ classId: classMemberships.classId, role: classMemberships.role })
-      .from(classMemberships)
-      .where(
-        and(
-          eq(classMemberships.userId, user.id),
-          eq(classMemberships.status, "active"),
-        ),
-      );
+    const listed = await listClassesForUser(user.id);
+    const scoped = classFilter ? listed.filter((row) => row.id === classFilter) : listed;
+    const classIds = scoped.map((row) => row.id);
 
-    const classIds = memberships.map((row) => row.classId);
-    const filteredClassIds = classFilter ? classIds.filter((id) => id === classFilter) : classIds;
-
-    if (filteredClassIds.length === 0) {
+    if (classIds.length === 0) {
       return NextResponse.json({ tests: [] });
     }
 
-    // Teachers see all tests in their classes. Students only see administered
-    // (available now) tests, plus any test they already have an attempt on.
     const teacherClassIds = new Set(
-      memberships.filter((m) => m.role === "teacher").map((m) => m.classId),
+      listed.filter((row) => row.role_in_class === "teacher").map((row) => row.id),
     );
 
     const studentAttemptRows = await db
@@ -41,32 +33,16 @@ export async function GET(request: Request) {
       .where(eq(testAttempts.studentId, user.id));
     const attemptTestIds = new Set(studentAttemptRows.map((row) => row.testId));
 
-    const data = await db
-      .select()
-      .from(tests)
-      .where(inArray(tests.classId, filteredClassIds))
-      .orderBy(desc(tests.createdAt));
-
-    const result: TestSummary[] = data
-      .filter((row) => {
-        if (teacherClassIds.has(row.classId)) return true;
-        if (attemptTestIds.has(row.id)) return true;
-        return isTestAvailableNow(row);
+    const perClass = await Promise.all(classIds.map((classId) => listTestsForClass(classId)));
+    const result: TestSummary[] = perClass
+      .flat()
+      .map(refreshTestAvailability)
+      .filter((test) => {
+        if (teacherClassIds.has(test.class_id)) return true;
+        if (attemptTestIds.has(test.id)) return true;
+        return Boolean(test.available_now);
       })
-      .map((row) => {
-        const schedule = mapTestScheduleToApi(row);
-        return {
-          id: row.id,
-          title: row.title,
-          class_id: row.classId,
-          teacher_id: row.teacherId,
-          grades_released: row.gradesReleased,
-          show_ai_feedback: row.showAiFeedback,
-          created_at: row.createdAt?.toISOString() ?? null,
-          updated_at: row.updatedAt?.toISOString() ?? null,
-          ...schedule,
-        };
-      });
+      .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
 
     return NextResponse.json({ tests: result });
   } catch (error) {
@@ -153,6 +129,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const data = await db.insert(testQuestions).values(mapping).returning();
+      await invalidateClassCatalog(classId, teacher.id);
       return NextResponse.json({ testId, title, questions: data, classId, status });
     } catch {
       await db.delete(tests).where(eq(tests.id, testId));

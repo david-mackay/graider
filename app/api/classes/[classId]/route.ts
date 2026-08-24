@@ -3,7 +3,7 @@ import { requireRole, requireClassAccess } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { classes } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { invalidateClassMemberCaches } from "@/lib/classes/invalidate";
+import { invalidateClassMemberCaches, invalidateClassCatalog } from "@/lib/classes/invalidate";
 
 type Params = { classId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -89,6 +89,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
     // Invalidate member class lists before cascade removes memberships.
     await invalidateClassMemberCaches(classId);
+    await invalidateClassCatalog(classId);
     await db.delete(classes).where(eq(classes.id, classId));
 
     return NextResponse.json({ deleted: true, name: row.name });

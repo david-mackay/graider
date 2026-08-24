@@ -5,6 +5,7 @@ import { parseTestFromStackImages, type ImagePayload } from "@/lib/reducto";
 import { coerceParsePreset, type DocumentParsePreset } from "@/lib/parse-presets";
 import { normalizeQuestion } from "@/lib/stack-grading";
 import type { OcrPage, ParsedImportQuestion, StackTestDiscovery } from "@/lib/types";
+import { invalidateClassCatalog } from "@/lib/classes/invalidate";
 
 export const DRAFT_AUTO_DISCOVERY_TITLE = "Detecting test from papers…";
 
@@ -86,6 +87,7 @@ export async function createDraftTestForAutoDiscovery(params: {
     sortOrder: 0,
   });
 
+  await invalidateClassCatalog(params.classId, params.teacherId);
   return test.id;
 }
 
@@ -183,12 +185,18 @@ async function findBestMatchingTest(params: {
 
 export async function deleteDraftTestIfUnused(testId: string) {
   const [test] = await db
-    .select({ id: tests.id, title: tests.title })
+    .select({
+      id: tests.id,
+      title: tests.title,
+      classId: tests.classId,
+      teacherId: tests.teacherId,
+    })
     .from(tests)
     .where(eq(tests.id, testId))
     .limit(1);
   if (!test || test.title !== DRAFT_AUTO_DISCOVERY_TITLE) return;
   await db.delete(tests).where(eq(tests.id, testId));
+  await invalidateClassCatalog(test.classId, test.teacherId);
 }
 
 export async function discoverOrCreateTestForStack(params: {
@@ -228,6 +236,8 @@ export async function discoverOrCreateTestForStack(params: {
     title: parsed.title,
     questions: parsed.questions,
   });
+
+  await invalidateClassCatalog(params.classId, params.teacherId);
 
   return {
     discovery: {

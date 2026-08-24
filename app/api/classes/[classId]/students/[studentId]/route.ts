@@ -23,6 +23,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       email: body.email,
     });
 
+    await invalidateClassMemberCaches(classId);
     return NextResponse.json({ student });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";

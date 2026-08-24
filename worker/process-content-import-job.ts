@@ -14,6 +14,7 @@ import { coerceParsePreset } from "@/lib/parse-presets";
 import { readFile } from "@/lib/storage";
 import { planTestEnrichment, type ExistingTestQuestion } from "@/lib/test-enrich";
 import type { ContentImportResult, ParsedImportQuestion } from "@/lib/types";
+import { invalidateClassCatalog } from "@/lib/classes/invalidate";
 import { and, asc, eq } from "drizzle-orm";
 import path from "path";
 
@@ -147,6 +148,7 @@ export async function processQuestionBankImportJob(jobId: string) {
       classId: job.classId,
       questions,
     });
+    await invalidateClassCatalog(job.classId, job.teacherId);
     const result: ContentImportResult = { questionsCreated: questions.length };
     await completeContentImportJob(jobId, result);
   } catch (error) {
@@ -265,6 +267,7 @@ export async function processTestImportJob(jobId: string) {
         teacherId: job.teacherId,
         incoming: parsed.questions,
       });
+      await invalidateClassCatalog(job.classId, job.teacherId);
       await completeContentImportJob(jobId, result);
       return;
     }
@@ -301,6 +304,7 @@ export async function processTestImportJob(jobId: string) {
       testTitle: test.title,
       questionsCreated: questionIds.length,
     };
+    await invalidateClassCatalog(job.classId, job.teacherId);
     await completeContentImportJob(jobId, result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Import failed.";

@@ -548,9 +548,9 @@ export default function TestsView({
                             {isBusy ? "Grading…" : "AI Grade"}
                           </button>
                         ) : null}
-                        {attempt.status === "graded" ? (
+                        {attempt.status === "submitted" || attempt.status === "graded" ? (
                           <button className={btnPrimary} type="button" onClick={() => void openAttemptDetail(attempt.id)}>
-                            Edit grades
+                            {attempt.status === "graded" ? "Edit grades" : "View / edit"}
                           </button>
                         ) : null}
                       </div>

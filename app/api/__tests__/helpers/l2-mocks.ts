@@ -144,6 +144,7 @@ export function installL2Mocks() {
     namedExports: {
       invalidateUserClasses: async () => undefined,
       invalidateClassMemberCaches: async () => undefined,
+      invalidateClassCatalog: async () => undefined,
     },
   });
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Badge, Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import ExportGradePdfButton from "@/components/shared/ExportGradePdfButton";
+import AttemptGradeEditor from "@/components/teacher/AttemptGradeEditor";
 import { handleJson } from "@/lib/dashboard-client";
 import type { GradedAttemptDetail } from "@/lib/dashboard-types";
 import type { RosterEntry, StackCommitResult } from "@/lib/types";
@@ -35,6 +36,9 @@ export default function StepResults({
   onRestart,
 }: StepResultsProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [editingByStudent, setEditingByStudent] = useState<Map<string, GradedAttemptDetail>>(new Map());
+  const [loadingStudentId, setLoadingStudentId] = useState<string | null>(null);
+  const [scoreOverrides, setScoreOverrides] = useState<Map<string, { total: number; max: number }>>(new Map());
 
   const rosterById = useMemo(() => {
     const map = new Map<string, RosterEntry>();
@@ -42,7 +46,17 @@ export default function StepResults({
     return map;
   }, [roster]);
 
-  function toggle(studentId: string) {
+  async function toggle(studentId: string, attemptId: string) {
+    const isOpen = expanded.has(studentId);
+    if (!isOpen && !editingByStudent.has(studentId)) {
+      setLoadingStudentId(studentId);
+      try {
+        const detail = await fetchAttempt(attemptId);
+        setEditingByStudent((prev) => new Map(prev).set(studentId, detail));
+      } finally {
+        setLoadingStudentId(null);
+      }
+    }
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(studentId)) next.delete(studentId);
@@ -98,8 +112,12 @@ export default function StepResults({
             entry?.full_name?.trim() ||
             entry?.email ||
             row.studentId.slice(0, 8);
-          const ratio = row.maxMarks > 0 ? row.totalMarks / row.maxMarks : 0;
+          const score = scoreOverrides.get(row.studentId);
+          const totalMarks = score?.total ?? row.totalMarks;
+          const maxMarks = score?.max ?? row.maxMarks;
+          const ratio = maxMarks > 0 ? totalMarks / maxMarks : 0;
           const isOpen = expanded.has(row.studentId);
+          const editing = editingByStudent.get(row.studentId);
 
           return (
             <li key={row.studentId} className="rounded-2xl border border-line bg-paper p-4 shadow-paper">
@@ -118,7 +136,7 @@ export default function StepResults({
 
                 <div className="flex flex-wrap items-center gap-3">
                   <p className={`font-hand -rotate-2 text-3xl font-bold ${ratioColor(ratio)}`}>
-                    {row.totalMarks}/{row.maxMarks}
+                    {totalMarks}/{maxMarks}
                   </p>
                   {row.created ? (
                     <Badge variant="green">New</Badge>
@@ -134,40 +152,33 @@ export default function StepResults({
                   />
                   <button
                     type="button"
-                    onClick={() => toggle(row.studentId)}
+                    onClick={() => void toggle(row.studentId, row.attemptId)}
                     className="cursor-pointer text-xs font-bold text-pen hover:text-pen-deep transition-colors duration-150"
                     aria-expanded={isOpen}
                   >
-                    {isOpen ? "Hide" : "Show"} marks
+                    {loadingStudentId === row.studentId ? "Loading…" : isOpen ? "Done editing" : "Edit marks"}
                   </button>
                 </div>
               </div>
 
               {isOpen ? (
                 <div className="mt-4 border-t border-line-soft pt-3">
-                  {row.grades.length === 0 ? (
-                    <p className="text-xs italic text-ink-faint">No per-question marks were recorded.</p>
+                  {editing ? (
+                    <AttemptGradeEditor
+                      attempt={editing}
+                      onClose={() =>
+                        setExpanded((prev) => {
+                          const next = new Set(prev);
+                          next.delete(row.studentId);
+                          return next;
+                        })
+                      }
+                      onSaved={(total, max) => {
+                        setScoreOverrides((prev) => new Map(prev).set(row.studentId, { total, max }));
+                      }}
+                    />
                   ) : (
-                    <ul className="space-y-2">
-                      {row.grades.map((grade, idx) => (
-                        <li
-                          key={`${grade.questionId}-${idx}`}
-                          className="rounded-xl border border-line bg-cream px-3.5 py-2.5"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
-                              Question {idx + 1}
-                            </p>
-                            <span className="font-hand text-xl font-bold text-pen">
-                              {grade.marksEarned}
-                            </span>
-                          </div>
-                          {grade.feedback ? (
-                            <p className="mt-1 font-hand text-lg leading-snug text-pen-deep">{grade.feedback}</p>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="text-xs italic text-ink-faint">Loading this student&apos;s paper…</p>
                   )}
                 </div>
               ) : null}
@@ -177,7 +188,7 @@ export default function StepResults({
       </ul>
 
       <p className="text-xs text-ink-faint">
-        Tip: head back to the dashboard to see these attempts in the test&apos;s submissions list.
+        You can edit any paper here — student answers, marks, and the shared answer key.
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

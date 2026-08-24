@@ -192,14 +192,18 @@ export default function StudentProfilePanel({
                               ) : null}
                             </div>
                           </div>
-                          {attempt.status === "graded" ? (
+                          {attempt.status === "submitted" || attempt.status === "graded" ? (
                             <button
                               type="button"
                               className={btnPrimary}
                               disabled={loadingAttemptId === attempt.id}
                               onClick={() => void openEditor(attempt.id)}
                             >
-                              {loadingAttemptId === attempt.id ? "Loading…" : "Edit grades"}
+                              {loadingAttemptId === attempt.id
+                                ? "Loading…"
+                                : attempt.status === "graded"
+                                  ? "Edit grades"
+                                  : "View / edit"}
                             </button>
                           ) : null}
                         </div>

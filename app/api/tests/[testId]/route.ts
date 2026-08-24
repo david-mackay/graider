@@ -9,6 +9,7 @@ import {
   mapTestScheduleToApi,
   normalizeTestStatus,
 } from "@/lib/test-availability";
+import { invalidateClassCatalog } from "@/lib/classes/invalidate";
 
 type Params = { testId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -208,6 +209,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       .set(updates)
       .where(eq(tests.id, testId))
       .returning();
+
+    await invalidateClassCatalog(test.classId, test.teacherId);
 
     return NextResponse.json({
       success: true,

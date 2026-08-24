@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { questionBank } from "@/drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { QuestionBankQuestion } from "@/lib/types";
+import { invalidateClassCatalog } from "@/lib/classes/invalidate";
 
 type Params = { questionId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -13,7 +14,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const user = await requireRole("teacher");
     const payload = (await request.json()) as Partial<QuestionBankQuestion>;
     const { questionId } = await params;
-    const classId = payload.class_id?.trim();
+    const classId =
+      payload.class_id?.trim() ||
+      (typeof (payload as { classId?: unknown }).classId === "string"
+        ? (payload as { classId: string }).classId.trim()
+        : "");
 
     if (!classId) {
       return NextResponse.json({ error: "classId is required." }, { status: 400 });
@@ -32,8 +37,13 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (payload.prompt?.trim()) {
       updates.prompt = payload.prompt.trim();
     }
-    if (payload.correct_answer?.trim()) {
-      updates.correctAnswer = payload.correct_answer.trim();
+    const nextCorrectAnswer =
+      payload.correct_answer?.trim() ||
+      (typeof (payload as { correctAnswer?: unknown }).correctAnswer === "string"
+        ? (payload as { correctAnswer: string }).correctAnswer.trim()
+        : "");
+    if (nextCorrectAnswer) {
+      updates.correctAnswer = nextCorrectAnswer;
     }
     if (payload.marks !== undefined) {
       const marks = Number(payload.marks);
@@ -62,48 +72,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       }
     }
 
-    const nextType =
-      updates.questionType ??
-      (payload.question_type === "mcq" || payload.question_type === "open"
-        ? payload.question_type
-        : null);
-    if (nextType === "mcq" || (updates.correctAnswer && !nextType)) {
-      // When updating an MCQ answer key (or switching to MCQ), require A–E.
-      const answerToCheck = updates.correctAnswer;
-      if (answerToCheck || nextType === "mcq") {
-        const raw = answerToCheck ?? payload.correct_answer?.trim();
-        if (raw) {
-          const letter = raw.toUpperCase().match(/^([A-E])\b/)?.[1];
-          if (!letter) {
-            return NextResponse.json(
-              { error: "MCQ correct_answer must be a letter A–E." },
-              { status: 400 },
-            );
-          }
-          const choiceKeys = updates.choices;
-          if (choiceKeys && choiceKeys.length > 0 && !choiceKeys.some((c) => c.key === letter)) {
-            return NextResponse.json(
-              { error: "MCQ correct_answer must match one of the choice keys." },
-              { status: 400 },
-            );
-          }
-          updates.correctAnswer = letter;
-        } else if (nextType === "mcq" && payload.correct_answer !== undefined) {
-          return NextResponse.json(
-            { error: "MCQ correct_answer must be a letter A–E." },
-            { status: 400 },
-          );
-        }
-      }
-    }
-
-    if (!Object.keys(updates).length) {
-      return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
-    }
-
-    // Check ownership
     const [existing] = await db
-      .select({ id: questionBank.id })
+      .select({
+        id: questionBank.id,
+        questionType: questionBank.questionType,
+        choices: questionBank.choices,
+      })
       .from(questionBank)
       .where(
         and(
@@ -116,6 +90,47 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     if (!existing) {
       return NextResponse.json({ error: "Question not found." }, { status: 404 });
+    }
+
+    const effectiveType =
+      updates.questionType === "mcq" || updates.questionType === "open"
+        ? updates.questionType
+        : existing.questionType === "mcq"
+          ? "mcq"
+          : "open";
+
+    if (effectiveType === "mcq") {
+      const raw = updates.correctAnswer ?? payload.correct_answer?.trim();
+      if (raw) {
+        const letter = raw.toUpperCase().match(/^([A-E])\b/)?.[1];
+        if (!letter) {
+          return NextResponse.json(
+            { error: "MCQ correct_answer must be a letter A–E." },
+            { status: 400 },
+          );
+        }
+        const choiceKeys =
+          updates.choices ??
+          (Array.isArray(existing.choices)
+            ? (existing.choices as Array<{ key: string; text: string }>)
+            : null);
+        if (choiceKeys && choiceKeys.length > 0 && !choiceKeys.some((c) => c.key === letter)) {
+          return NextResponse.json(
+            { error: "MCQ correct_answer must match one of the choice keys." },
+            { status: 400 },
+          );
+        }
+        updates.correctAnswer = letter;
+      } else if (updates.questionType === "mcq" && payload.correct_answer !== undefined) {
+        return NextResponse.json(
+          { error: "MCQ correct_answer must be a letter A–E." },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (!Object.keys(updates).length) {
+      return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
     }
 
     const [data] = await db
@@ -148,6 +163,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       updated_at: data.updatedAt?.toISOString() ?? null,
     };
 
+    await invalidateClassCatalog(classId, user.id);
     return NextResponse.json({ question });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
@@ -177,6 +193,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
         ),
       );
 
+    await invalidateClassCatalog(classId);
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";

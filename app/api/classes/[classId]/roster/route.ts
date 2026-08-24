@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireClassAccess } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { classMemberships, appUsers } from "@/drizzle/schema";
-import { and, eq, inArray } from "drizzle-orm";
-import { RosterEntry } from "@/lib/types";
+import { listClassRoster } from "@/lib/classes/list-roster";
 
 type Params = {
   classId: string;
@@ -18,47 +15,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     }
 
     await requireClassAccess(classId, ["teacher"]);
-
-    const memberships = await db
-      .select({ userId: classMemberships.userId })
-      .from(classMemberships)
-      .where(
-        and(
-          eq(classMemberships.classId, classId),
-          eq(classMemberships.role, "student"),
-          eq(classMemberships.status, "active"),
-        ),
-      );
-
-    if (memberships.length === 0) {
-      return NextResponse.json({ roster: [] satisfies RosterEntry[] });
-    }
-
-    const userIds = memberships.map((row) => row.userId);
-    const users = await db
-      .select({ id: appUsers.id, email: appUsers.email, fullName: appUsers.fullName })
-      .from(appUsers)
-      .where(inArray(appUsers.id, userIds));
-
-    const roster: RosterEntry[] = users.map((user) => ({
-      user_id: user.id,
-      full_name: user.fullName,
-      email: user.email,
-    }));
-
-    roster.sort((first, second) => {
-      if (first.full_name && second.full_name) {
-        return first.full_name.localeCompare(second.full_name);
-      }
-      if (first.full_name && !second.full_name) {
-        return -1;
-      }
-      if (!first.full_name && second.full_name) {
-        return 1;
-      }
-      return 0;
-    });
-
+    const roster = await listClassRoster(classId);
     return NextResponse.json({ roster });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";

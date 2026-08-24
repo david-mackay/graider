@@ -22,7 +22,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const marksRaw = body.marksEarned;
     const feedbackRaw = body.feedback;
-    const studentAnswerRaw = body.studentAnswer;
+    const studentAnswerRaw =
+      typeof body.studentAnswer === "string"
+        ? body.studentAnswer
+        : typeof body.student_answer === "string"
+          ? body.student_answer
+          : undefined;
 
     // studentAnswer is optional — when provided we re-grade, otherwise we just patch marks/feedback
     const regradeMode = typeof studentAnswerRaw === "string";

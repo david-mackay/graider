@@ -20,6 +20,7 @@ import {
   type OnboardingVault,
 } from "@/lib/onboarding/types";
 import { type OnboardingSyncResponse } from "@/lib/types";
+import { invalidateClassMemberCaches, invalidateClassCatalog } from "@/lib/classes/invalidate";
 
 const STARTER_CLASS_NAME = "My first class";
 const STARTER_TEST_TITLE = "My first test";
@@ -222,6 +223,9 @@ export async function POST(request: NextRequest) {
 
       return { classId: classRow.id, testId: testRow.id, attemptIds };
     });
+
+    await invalidateClassMemberCaches(result.classId);
+    await invalidateClassCatalog(result.classId, teacherId);
 
     const response: OnboardingSyncResponse = {
       classId: result.classId,
