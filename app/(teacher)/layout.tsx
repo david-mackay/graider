@@ -37,7 +37,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
             <span className="hidden sm:inline-flex items-center rounded-full bg-pen-wash px-2.5 py-0.5 text-xs font-bold text-pen-deep ring-1 ring-pen-soft/60">
               Teacher
             </span>
-            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "h-8 w-8" } }} />
+            <UserButton appearance={{ elements: { avatarBox: "h-8 w-8" } }} />
           </>
         }
       />

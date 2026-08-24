@@ -21,7 +21,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     <>
       <AppHeader
         href="/s"
-        rightSlot={<UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "h-8 w-8" } }} />}
+        rightSlot={<UserButton appearance={{ elements: { avatarBox: "h-8 w-8" } }} />}
       />
       <div className="min-h-[calc(100vh-3.5rem)]">{children}</div>
     </>
