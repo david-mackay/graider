@@ -91,3 +91,21 @@ describe("stack-grading matchOcrAnswersToQuestions", () => {
     assert.equal(normalizeQuestion(" Hello, World! "), "hello world");
   });
 });
+
+describe("buildStudentFirstPreviewPages storage paths", () => {
+  it("binds files by upload order even when OCR repeats pageIndex 0", async () => {
+    const { buildStudentFirstPreviewPages } = await import("@/lib/stack-grading");
+    const pages = buildStudentFirstPreviewPages({
+      ocrPages: [
+        { pageIndex: 0, studentNameGuess: "", confidence: 0, answers: [] },
+        { pageIndex: 0, studentNameGuess: "", confidence: 0, answers: [] },
+        { pageIndex: 0, studentNameGuess: "", confidence: 0, answers: [] },
+      ],
+      storagePaths: ["stack-preview/t/a.png", "stack-preview/t/b.png", "stack-preview/t/c.png"],
+    });
+    assert.deepEqual(
+      pages.map((page) => page.storagePath),
+      ["stack-preview/t/a.png", "stack-preview/t/b.png", "stack-preview/t/c.png"],
+    );
+  });
+});

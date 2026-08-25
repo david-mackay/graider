@@ -33,17 +33,24 @@ async function notifyJobSafely(jobId: string) {
 
 function enrichAssignmentsWithStoragePaths(
   assignments: StackAssignment[],
-  previewJobId: string | null,
   previewPayload: GradeStackPreviewPayload | null,
+  previewStoragePaths: (string | null)[] = [],
 ): StackAssignment[] {
-  if (!previewPayload?.pages?.length) return assignments;
-  const pathByPageIndex = new Map(
-    previewPayload.pages.map((page) => [page.pageIndex, page.storagePath ?? null]),
-  );
-  return assignments.map((assignment) => ({
-    ...assignment,
-    storagePath: assignment.storagePath ?? pathByPageIndex.get(assignment.pageIndex) ?? null,
-  }));
+  const pathByPageIndex = new Map<number, string | null>();
+  for (const page of previewPayload?.pages ?? []) {
+    pathByPageIndex.set(page.pageIndex, page.storagePath ?? null);
+  }
+  return assignments.map((assignment) => {
+    const fromJob = previewStoragePaths[assignment.pageIndex];
+    const fromPreview = pathByPageIndex.get(assignment.pageIndex);
+    const resolved =
+      (typeof fromJob === "string" && fromJob.trim() ? fromJob : null) ??
+      (typeof assignment.storagePath === "string" && assignment.storagePath.trim()
+        ? assignment.storagePath
+        : null) ??
+      (typeof fromPreview === "string" && fromPreview.trim() ? fromPreview : null);
+    return { ...assignment, storagePath: resolved };
+  });
 }
 
 function isStudentFirst(input: ReturnType<typeof getPreviewInput>): boolean {
@@ -157,14 +164,18 @@ export async function processStackCommitJob(data: GradeStackQueueJobData) {
 
   const input = getCommitInput(row);
   let previewPayload: GradeStackPreviewPayload | null = null;
+  let previewStoragePaths: (string | null)[] = [];
   if (input.previewJobId) {
     const previewJob = await findJobById(input.previewJobId);
     previewPayload = (previewJob?.previewPayload as GradeStackPreviewPayload | null) ?? null;
+    if (previewJob) {
+      previewStoragePaths = getPreviewInput(previewJob).storagePaths.map((path) => path as string | null);
+    }
   }
   const assignments = enrichAssignmentsWithStoragePaths(
     input.assignments,
-    input.previewJobId,
     previewPayload,
+    previewStoragePaths,
   );
 
   try {

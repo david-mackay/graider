@@ -351,7 +351,7 @@ export function buildStudentFirstPreviewPages(params: {
     candidates: [],
     status: "exact" as const,
     ocrAnswers: page.answers,
-    storagePath: params.storagePaths[page.pageIndex ?? index] ?? null,
+    storagePath: params.storagePaths[index] ?? params.storagePaths[page.pageIndex ?? index] ?? null,
   }));
 }
 
