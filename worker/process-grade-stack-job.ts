@@ -6,6 +6,7 @@ import {
   incrementAttemptCount,
   updateCommitProgress,
   updateJobStatus,
+  updatePreviewProgress,
 } from "@/lib/grade-stack-jobs/repository";
 import { getCommitInput, getPreviewInput } from "@/lib/grade-stack-jobs/map-job";
 import { loadPreviewImagesFromStorage } from "@/lib/grade-stack-jobs/load-images";
@@ -78,8 +79,25 @@ export async function processStackPreviewJob(data: GradeStackQueueJobData) {
     const parsePreset = coerceParsePreset(input.parsePreset, "grade_stack");
 
     const ocrPages = studentFirst
-      ? await extractStudentFirstPreview(images, input.studentPageAssignments!, parsePreset)
-      : await extractHandwrittenStack(images, parsePreset);
+      ? await extractStudentFirstPreview(
+          images,
+          input.studentPageAssignments!,
+          parsePreset,
+          async (progress) => {
+            await updatePreviewProgress(data.jobId, {
+              total: progress.total,
+              completed: progress.completed,
+              currentStudentId: progress.currentStudentId || null,
+              completedStudentIds: progress.completedStudentIds,
+            });
+          },
+        )
+      : await extractHandwrittenStack(images, parsePreset, async (progress) => {
+          await updatePreviewProgress(data.jobId, {
+            total: 100,
+            completed: progress.percent,
+          });
+        });
 
     if (input.autoDiscover) {
       const classId = input.classId ?? row.classId;

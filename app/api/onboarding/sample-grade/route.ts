@@ -7,6 +7,7 @@ import { gradeMcqExact } from "@/lib/mcq";
 import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import type { OnboardingAnswerKey, OnboardingQuestionGrade } from "@/lib/onboarding/types";
 import type { SampleGradeResponse } from "@/lib/types";
+import { ndjsonStreamResponse, wantsNdjsonProgress } from "@/lib/http/ndjson-progress";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -233,18 +234,76 @@ export async function POST(request: NextRequest) {
     if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
       return NextResponse.json({ error: "Each image must be under 8 MB." }, { status: 413 });
     }
-    const mimeType = img.type || "";
-    if (!mimeType.startsWith("image/")) {
-      return NextResponse.json({ error: "Upload image files (JPG or PNG)." }, { status: 400 });
-    }
     const filename =
       typeof File !== "undefined" && img instanceof File && img.name
         ? img.name
         : `page-${i + 1}.png`;
-    imagePayloads.push({ filename, mimeType, base64: Buffer.from(arrayBuffer).toString("base64") });
+    const mimeType = img.type || (filename.toLowerCase().endsWith(".pdf") ? "application/pdf" : "");
+    const isPdf =
+      mimeType === "application/pdf" ||
+      mimeType === "application/x-pdf" ||
+      filename.toLowerCase().endsWith(".pdf");
+    const isImage = mimeType.startsWith("image/");
+    if (!isPdf && !isImage) {
+      return NextResponse.json({ error: "Upload image files (JPG or PNG) or a PDF." }, { status: 400 });
+    }
+    imagePayloads.push({
+      filename,
+      mimeType: isPdf ? "application/pdf" : mimeType || "image/jpeg",
+      base64: Buffer.from(arrayBuffer).toString("base64"),
+    });
   }
 
   try {
+    if (wantsNdjsonProgress(request)) {
+      return ndjsonStreamResponse(async (emit) => {
+        emit({ type: "progress", percent: 5, label: "Reading the paper…" });
+        try {
+          const answers = await extractHandwrittenAnswers(
+            imagePayloads,
+            coerceParsePreset(form.get("parsePreset")?.toString(), "student_ocr"),
+            (progress) => emit({ type: "progress", percent: Math.round(progress.percent * 0.75), label: progress.label }),
+          );
+          emit({ type: "progress", percent: 80, label: "Grading answers…" });
+          if (answers.length === 0) {
+            const softFail: SampleGradeResponse = {
+              marksEarned: 0,
+              maxMarks,
+              feedback: "We couldn't read the answer — try a clearer photo.",
+              ocrAnswerText: "",
+              questions: answerKeys.map((key) => ({
+                prompt: key.prompt,
+                marksEarned: 0,
+                maxMarks: key.marks,
+                feedback: "Couldn't read this answer.",
+                ocrAnswerText: "",
+              })),
+            };
+            emit({ type: "progress", percent: 100, label: "Done" });
+            emit({ type: "result", ...softFail });
+            return;
+          }
+          const studentAnswers = answerKeys.map((_key, index) => {
+            const byIndex = answers.find((a) => {
+              if (typeof a.question_index !== "number") return false;
+              const raw = Math.trunc(a.question_index);
+              return raw === index || raw === index + 1;
+            });
+            return byIndex?.answer ?? answers[index]?.answer ?? "";
+          });
+          const response = await gradeAgainstKeys(answerKeys, studentAnswers);
+          emit({ type: "progress", percent: 100, label: "Done" });
+          emit({ type: "result", ...response });
+        } catch {
+          emit({
+            type: "error",
+            status: 502,
+            error: "We're having trouble grading right now — please try again.",
+          });
+        }
+      });
+    }
+
     const answers = await extractHandwrittenAnswers(
       imagePayloads,
       coerceParsePreset(form.get("parsePreset")?.toString(), "student_ocr"),

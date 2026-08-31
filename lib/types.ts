@@ -205,6 +205,8 @@ export type GradeStackPreviewPayload = {
   discovery?: StackTestDiscovery | null;
   /** Pre-assigned student per page (student-first mobile flow). */
   studentPageAssignments?: StudentPageAssignment[];
+  /** Filled while OCR is running so clients can show a determinate bar. */
+  progress?: GradeStackCommitProgress;
 };
 
 export type StudentPageAssignment = {
@@ -224,6 +226,7 @@ export type GradeStackCommitProgress = {
   total: number;
   completed: number;
   currentStudentId?: string | null;
+  completedStudentIds?: string[];
 };
 
 export type GradeStackCommitPayload = {

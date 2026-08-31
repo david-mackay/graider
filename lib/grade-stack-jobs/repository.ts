@@ -3,6 +3,7 @@ import { gradeStackJobs } from "@/drizzle/schema";
 import {
   GradeStackCommitJobInput,
   GradeStackCommitPayload,
+  GradeStackCommitProgress,
   GradeStackJobFailure,
   GradeStackJobPhase,
   GradeStackJobStatus,
@@ -80,6 +81,24 @@ export async function updateJobStatus(
       status,
       error: patch?.error ?? undefined,
       attemptCount: patch?.attemptCount ?? undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(gradeStackJobs.id, jobId));
+}
+
+export async function updatePreviewProgress(jobId: string, progress: GradeStackCommitProgress) {
+  const row = await findJobById(jobId);
+  const existing = (row?.previewPayload as GradeStackPreviewPayload | null) ?? null;
+  await db
+    .update(gradeStackJobs)
+    .set({
+      status: "processing",
+      previewPayload: {
+        pages: existing?.pages ?? [],
+        discovery: existing?.discovery,
+        studentPageAssignments: existing?.studentPageAssignments,
+        progress,
+      },
       updatedAt: new Date(),
     })
     .where(eq(gradeStackJobs.id, jobId));

@@ -5,6 +5,7 @@ import { coerceParsePreset } from "@/lib/parse-presets";
 import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import { ONBOARDING_MAX_ANSWER_KEYS } from "@/lib/onboarding/types";
 import type { ParsedImportQuestion } from "@/lib/types";
+import { ndjsonStreamResponse, wantsNdjsonProgress } from "@/lib/http/ndjson-progress";
 
 export const runtime = "nodejs";
 // Reducto OCR + extract can take a while; avoid Vercel HTML timeouts that break res.json().
@@ -14,6 +15,7 @@ export const maxDuration = 120;
 // client-facing limit below that to return JSON instead of an HTML 413.
 const MAX_PDF_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_FILES = 10;
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
@@ -77,30 +79,61 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const pdfInput = form.get("pdf");
-  const imageInputs = form.getAll("image").filter(isBlobBody) as Blob[];
   const uploads: { buffer: Buffer; filename: string; mimeType: string }[] = [];
+  let imageCount = 0;
+  let pdfCount = 0;
 
-  for (let i = 0; i < imageInputs.length; i++) {
-    const img = imageInputs[i];
-    const arrayBuffer = await img.arrayBuffer();
+  for (const [field, value] of form.entries()) {
+    if (field !== "pdf" && field !== "pdfs" && field !== "image") continue;
+    if (!isBlobBody(value)) continue;
+
+    const filename =
+      typeof File !== "undefined" && value instanceof File && value.name
+        ? value.name
+        : field === "image"
+          ? `key-${imageCount + 1}.png`
+          : `answer-key-${pdfCount + 1}.pdf`;
+    const isPdfField = field === "pdf" || field === "pdfs";
+    const looksPdf =
+      value.type === "application/pdf" ||
+      value.type === "application/x-pdf" ||
+      filename.toLowerCase().endsWith(".pdf");
+
+    if (isPdfField) {
+      if (value.type && !looksPdf) {
+        return NextResponse.json({ error: "Upload a PDF answer key." }, { status: 400 });
+      }
+      const arrayBuffer = await value.arrayBuffer();
+      if (arrayBuffer.byteLength > MAX_PDF_BYTES) {
+        return NextResponse.json(
+          { error: "Each PDF must be under 4 MB, or add the key manually." },
+          { status: 413 },
+        );
+      }
+      pdfCount += 1;
+      uploads.push({
+        buffer: Buffer.from(arrayBuffer),
+        filename,
+        mimeType: "application/pdf",
+      });
+      continue;
+    }
+
+    const arrayBuffer = await value.arrayBuffer();
     if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
       return NextResponse.json(
         { error: "Each image must be under 4 MB." },
         { status: 413 },
       );
     }
-    const mimeType = img.type || "image/jpeg";
+    const mimeType = value.type || "image/jpeg";
     if (!mimeType.startsWith("image/")) {
       return NextResponse.json(
         { error: "Upload image files (JPG or PNG) or a PDF." },
         { status: 400 },
       );
     }
-    const filename =
-      typeof File !== "undefined" && img instanceof File && img.name
-        ? img.name
-        : `key-${i + 1}.png`;
+    imageCount += 1;
     uploads.push({
       buffer: Buffer.from(arrayBuffer),
       filename,
@@ -108,27 +141,11 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (pdfInput && isBlobBody(pdfInput)) {
-    const arrayBuffer = await pdfInput.arrayBuffer();
-    if (arrayBuffer.byteLength > MAX_PDF_BYTES) {
-      return NextResponse.json(
-        { error: "PDF is too large. Keep it under 4 MB, or add the key manually." },
-        { status: 413 },
-      );
-    }
-    const mimeType = pdfInput.type || "application/pdf";
-    const filename =
-      typeof File !== "undefined" && pdfInput instanceof File && pdfInput.name
-        ? pdfInput.name
-        : "answer-key.pdf";
-    if (mimeType && mimeType !== "application/pdf" && !filename.toLowerCase().endsWith(".pdf")) {
-      return NextResponse.json({ error: "Upload a PDF answer key." }, { status: 400 });
-    }
-    uploads.unshift({
-      buffer: Buffer.from(arrayBuffer),
-      filename,
-      mimeType: "application/pdf",
-    });
+  if (uploads.length > MAX_FILES) {
+    return NextResponse.json(
+      { error: `Upload at most ${MAX_FILES} files at a time.` },
+      { status: 400 },
+    );
   }
 
   if (uploads.length === 0) {
@@ -144,26 +161,68 @@ export async function POST(request: NextRequest) {
       form.get("parsePreset")?.toString(),
       sourceIsVision ? "answer_key_photo" : "answer_key_pdf",
     );
-    const parsed = await extractAnswerKeyQuestions(uploads, preset);
-    const questions = mapQuestions(parsed);
-    const source = sourceIsVision ? "vision" : "reducto";
-    if (questions.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "We couldn't prefill from that file. Tweak the review below, or try a clearer photo.",
-          questions: [],
-          needsPhoto: source !== "vision",
+    const stream = wantsNdjsonProgress(request);
+
+    const runExtract = async (onProgress?: (percent: number, label: string) => void) => {
+      const parsed = await extractAnswerKeyQuestions(uploads, preset, (progress) => {
+        onProgress?.(progress.percent, progress.label);
+      });
+      const questions = mapQuestions(parsed);
+      const source = sourceIsVision ? "vision" : "reducto";
+      if (questions.length === 0) {
+        return {
+          ok: false as const,
+          status: 422,
+          body: {
+            error:
+              "We couldn't prefill from that file. Tweak the review below, or try a clearer photo.",
+            questions: [],
+            needsPhoto: source !== "vision",
+          },
+        };
+      }
+      return {
+        ok: true as const,
+        status: 200,
+        body: {
+          questions,
+          truncated: parsed.length > ONBOARDING_MAX_ANSWER_KEYS,
+          totalFound: parsed.length,
+          source,
         },
-        { status: 422 },
-      );
+      };
+    };
+
+    if (stream) {
+      return ndjsonStreamResponse(async (emit) => {
+        emit({ type: "progress", percent: 0, label: "Files received" });
+        try {
+          const outcome = await runExtract((percent, label) => {
+            emit({ type: "progress", percent, label });
+          });
+          if (!outcome.ok) {
+            emit({ type: "error", status: outcome.status, ...outcome.body });
+            return;
+          }
+          emit({ type: "progress", percent: 100, label: "Done" });
+          emit({ type: "result", ...outcome.body });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Could not read that answer key.";
+          const status = /not configured|missing REDUCTO/i.test(message)
+            ? 503
+            : /no questions|could not read|could not extract|upload a pdf/i.test(message)
+              ? 422
+              : 502;
+          emit({ type: "error", status, error: message, questions: [] });
+        }
+      });
     }
-    return NextResponse.json({
-      questions,
-      truncated: parsed.length > ONBOARDING_MAX_ANSWER_KEYS,
-      totalFound: parsed.length,
-      source,
-    });
+
+    const outcome = await runExtract();
+    if (!outcome.ok) {
+      return NextResponse.json(outcome.body, { status: outcome.status });
+    }
+    return NextResponse.json(outcome.body);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not read that answer key.";
     const status = /not configured|missing REDUCTO/i.test(message)

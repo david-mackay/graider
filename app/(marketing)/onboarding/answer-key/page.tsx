@@ -25,6 +25,21 @@ import {
 const DEFAULT_PROMPT = "Name two functions of the mitochondria.";
 const DEFAULT_CORRECT_ANSWER =
   "Mitochondria produce ATP via cellular respiration, and they regulate cellular metabolism / signal apoptosis.";
+const MAX_STAGED_FILES = 10;
+
+type StagedUpload = { id: string; file: File };
+
+function isPdfFile(file: File): boolean {
+  return (
+    file.type === "application/pdf" ||
+    file.type === "application/x-pdf" ||
+    /\.pdf$/i.test(file.name)
+  );
+}
+
+function stagedFileId(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 7)}`;
+}
 
 type ParseResponse = {
   questions?: OnboardingAnswerKey[];
@@ -71,6 +86,7 @@ export default function OnboardingAnswerKeyPage() {
   const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
     defaultPresetForSurface("answer_key_pdf"),
   );
+  const [staged, setStaged] = useState<StagedUpload[]>([]);
 
   useEffect(() => {
     fireEvent(ONBOARDING_EVENTS.ANSWER_KEY);
@@ -116,6 +132,7 @@ export default function OnboardingAnswerKeyPage() {
         if (payload.needsPhoto || questions.length === 0) {
           setKeys([blankKey()]);
           setMode("preview");
+          setStaged([]);
           setError(
             payload.error ??
               "We couldn't prefill from that file. Tweak the review below, or photograph the key.",
@@ -127,6 +144,7 @@ export default function OnboardingAnswerKeyPage() {
       if (questions.length === 0) {
         setKeys([blankKey()]);
         setMode("preview");
+        setStaged([]);
         setError("Nothing found — add questions in the review below.");
         return;
       }
@@ -134,6 +152,7 @@ export default function OnboardingAnswerKeyPage() {
       setTruncated(Boolean(payload.truncated));
       setMode("preview");
       setError(null);
+      setStaged([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not read that answer key.");
       setUploadName(null);
@@ -144,27 +163,59 @@ export default function OnboardingAnswerKeyPage() {
     }
   }
 
-  async function onPickPdf(file: File | null) {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append("pdf", file, file.name);
-    formData.append("parsePreset", parsePreset);
-    await parseUpload(formData, file.name);
+  function addStagedFiles(files: File[], asImages: boolean) {
+    if (files.length === 0) return;
+    setError(null);
+    if (asImages && parsePreset === "typed_pdf") {
+      setParsePreset(defaultPresetForSurface("answer_key_photo"));
+    }
+    setStaged((prev) => {
+      const remaining = MAX_STAGED_FILES - prev.length;
+      if (remaining <= 0) return prev;
+      return [
+        ...prev,
+        ...files.slice(0, remaining).map((file) => ({
+          id: stagedFileId(file),
+          file,
+        })),
+      ];
+    });
+    if (staged.length >= MAX_STAGED_FILES) {
+      setError(`You can add at most ${MAX_STAGED_FILES} files.`);
+    } else if (staged.length + files.length > MAX_STAGED_FILES) {
+      setError(`Added files up to the ${MAX_STAGED_FILES}-file limit.`);
+    }
+    if (fileRef.current) fileRef.current.value = "";
+    if (imageRef.current) imageRef.current.value = "";
   }
 
-  async function onPickImages(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  function removeStaged(id: string) {
+    setStaged((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  async function onSubmitStaged() {
+    if (staged.length === 0) {
+      setError("Add at least one PDF or photo, then read the answer key.");
+      return;
+    }
+    const formData = new FormData();
+    for (const item of staged) {
+      if (isPdfFile(item.file)) {
+        formData.append("pdf", item.file, item.file.name);
+      } else {
+        formData.append("image", item.file, item.file.name || "key.jpg");
+      }
+    }
+    const hasImages = staged.some((item) => !isPdfFile(item.file));
     const preset =
-      parsePreset === "typed_pdf"
+      hasImages && parsePreset === "typed_pdf"
         ? defaultPresetForSurface("answer_key_photo")
         : parsePreset;
     if (preset !== parsePreset) setParsePreset(preset);
-    const formData = new FormData();
-    Array.from(files).forEach((file, index) => {
-      formData.append("image", file, file.name || `key-${index + 1}.jpg`);
-    });
     formData.append("parsePreset", preset);
-    await parseUpload(formData, files.length === 1 ? files[0].name : `${files.length} photos`);
+    const label =
+      staged.length === 1 ? staged[0]!.file.name : `${staged.length} files`;
+    await parseUpload(formData, label);
   }
 
   function updateKey(index: number, patch: Partial<OnboardingAnswerKey>) {
@@ -251,15 +302,16 @@ export default function OnboardingAnswerKeyPage() {
               Upload your answer key
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-              PDF for typed keys, or a photo if answers are circled / the PDF is a scan. Best-effort
+              Add one or more PDFs or photos, then read them together. Best-effort
               prefill — you&apos;ll review every question next.
             </p>
             <input
               ref={fileRef}
               type="file"
               accept="application/pdf,.pdf"
+              multiple
               className="sr-only"
-              onChange={(e) => void onPickPdf(e.target.files?.[0] ?? null)}
+              onChange={(e) => addStagedFiles(Array.from(e.target.files ?? []), false)}
             />
             <input
               ref={imageRef}
@@ -267,7 +319,7 @@ export default function OnboardingAnswerKeyPage() {
               accept="image/*"
               multiple
               className="sr-only"
-              onChange={(e) => void onPickImages(e.target.files)}
+              onChange={(e) => addStagedFiles(Array.from(e.target.files ?? []), true)}
             />
             <ParsePresetPicker
               surface="answer_key_pdf"
@@ -281,9 +333,9 @@ export default function OnboardingAnswerKeyPage() {
                 type="button"
                 disabled={busy}
                 onClick={() => fileRef.current?.click()}
-                className={`${btnPrimary} w-full justify-center py-3 disabled:opacity-60`}
+                className={`${btnSecondary} w-full justify-center py-3 disabled:opacity-60`}
               >
-                {busy ? "Reading…" : uploadName?.endsWith(".pdf") ? `Replace · ${uploadName}` : "Choose PDF"}
+                Add PDF(s)
               </button>
               <button
                 type="button"
@@ -291,13 +343,47 @@ export default function OnboardingAnswerKeyPage() {
                 onClick={() => imageRef.current?.click()}
                 className={`${btnSecondary} w-full justify-center py-3 disabled:opacity-60`}
               >
-                {busy ? "Reading…" : "Upload photo(s)"}
+                Add photo(s)
               </button>
             </div>
+            {staged.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {staged.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-line-soft bg-cream/50 px-3 py-2"
+                  >
+                    <p className="truncate text-xs font-medium text-ink">{item.file.name}</p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => removeStaged(item.id)}
+                      className="shrink-0 text-xs font-bold text-ink-faint hover:text-pen disabled:opacity-60"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <button
+              type="button"
+              disabled={busy || staged.length === 0}
+              onClick={() => void onSubmitStaged()}
+              className={`${btnPrimary} mt-3 w-full justify-center py-3 disabled:opacity-60`}
+            >
+              {busy
+                ? "Reading…"
+                : staged.length === 0
+                  ? "Read answer key"
+                  : staged.length === 1
+                    ? "Read answer key"
+                    : `Read ${staged.length} files`}
+            </button>
             {busy ? (
               <div className="mt-4 space-y-2" role="status" aria-live="polite">
                 <p className="text-xs font-semibold text-ink-soft">
-                  Reading your answer key…
+                  Reading {uploadName ?? "your answer key"}…
                 </p>
                 <div className="h-1.5 overflow-hidden rounded-full bg-line">
                   <div className="progress-indeterminate-bar h-full w-2/5 rounded-full bg-pen" />
@@ -305,7 +391,7 @@ export default function OnboardingAnswerKeyPage() {
               </div>
             ) : (
               <p className="mt-2 text-xs text-ink-faint">
-                Scanned or circled keys work too — upload the PDF or a clear photo.
+                Keep each file under 4 MB. Scanned or circled keys work too.
               </p>
             )}
           </div>

@@ -59,11 +59,20 @@ export function buildStudentGradingProgress(
       }));
     }
     if (job.status === "processing") {
-      return students.map((student) => ({
-        ...student,
-        status: "processing",
-        detail: "Reading pages",
-      }));
+      const previewProgress = job.preview?.progress;
+      const doneIds = new Set(previewProgress?.completedStudentIds ?? []);
+      return students.map((student) => {
+        if (doneIds.has(student.studentId)) {
+          return { ...student, status: "done" as const, detail: "Pages read" };
+        }
+        if (previewProgress?.currentStudentId === student.studentId) {
+          return { ...student, status: "processing" as const, detail: "Reading pages" };
+        }
+        if (doneIds.size > 0 || previewProgress?.currentStudentId) {
+          return { ...student, status: "queued" as const, detail: "Waiting" };
+        }
+        return { ...student, status: "processing" as const, detail: "Reading pages" };
+      });
     }
     return students.map((student) => ({
       ...student,
@@ -131,7 +140,16 @@ export function gradingProgressHeadline(
 
   if (phase === "preview") {
     if (job.status === "needs_review") return "Pages ready for review";
-    if (job.status === "processing") return `Reading pages (${doneCount}/${total} ready)`;
+    if (job.status === "processing") {
+      const previewProgress = job.preview?.progress;
+      if (previewProgress && previewProgress.total === 100) {
+        return `Reading pages (${previewProgress.completed}%)`;
+      }
+      if (previewProgress && previewProgress.total > 0) {
+        return `Reading pages (${previewProgress.completed}/${previewProgress.total})`;
+      }
+      return `Reading pages (${doneCount}/${total} ready)`;
+    }
     return "Queued — OCR will start shortly";
   }
 
@@ -141,3 +159,27 @@ export function gradingProgressHeadline(
   }
   return "Queued — grading will start shortly";
 }
+
+export function gradingProgressPercent(
+  students: StudentGradingProgress[],
+  phase: GradingPhase,
+  job: GradeStackJob | null,
+): number {
+  if (!job) return 0;
+  if (job.status === "needs_review" || job.status === "completed") return 100;
+  if (job.status === "failed" || job.status === "cancelled") return 0;
+  if (phase === "preview") {
+    const previewProgress = job.preview?.progress;
+    if (previewProgress && previewProgress.total > 0) {
+      return Math.min(100, Math.round((previewProgress.completed / previewProgress.total) * 100));
+    }
+    return 0;
+  }
+  const commitProgress = job.commit?.progress;
+  if (commitProgress && commitProgress.total > 0) {
+    return Math.min(100, Math.round((commitProgress.completed / commitProgress.total) * 100));
+  }
+  const done = students.filter((student) => student.status === "done").length;
+  return students.length === 0 ? 0 : Math.round((done / students.length) * 100);
+}
+

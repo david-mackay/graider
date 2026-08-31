@@ -157,13 +157,41 @@ function unwrapExtractResult(result: unknown): Record<string, unknown> {
   return {};
 }
 
-async function uploadFiles(inputs: ReductoUploadInput[]): Promise<string[]> {
+export type ReductoWorkProgress = {
+  percent: number;
+  label: string;
+};
+
+function mapRange(
+  onProgress: ((progress: ReductoWorkProgress) => void | Promise<void>) | undefined,
+  start: number,
+  end: number,
+  localPercent: number,
+  label: string,
+) {
+  if (!onProgress) return;
+  const clamped = Math.min(100, Math.max(0, localPercent));
+  return onProgress({
+    percent: Math.round(start + ((end - start) * clamped) / 100),
+    label,
+  });
+}
+
+async function uploadFiles(
+  inputs: ReductoUploadInput[],
+  onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>,
+): Promise<string[]> {
   if (inputs.length === 0) {
     throw new Error("Upload at least one document or photo.");
   }
   const client = getClient();
   const fileIds: string[] = [];
-  for (const input of inputs) {
+  for (let i = 0; i < inputs.length; i++) {
+    const input = inputs[i]!;
+    await onProgress?.({
+      percent: Math.round((i / inputs.length) * 100),
+      label: `Sending file ${i + 1} of ${inputs.length}…`,
+    });
     const file = await toFile(input.buffer, input.filename, {
       type: input.mimeType || guessMime(input.filename),
     });
@@ -172,6 +200,10 @@ async function uploadFiles(inputs: ReductoUploadInput[]): Promise<string[]> {
       throw new Error("Failed to upload document for parsing.");
     }
     fileIds.push(uploaded.file_id);
+    await onProgress?.({
+      percent: Math.round(((i + 1) / inputs.length) * 100),
+      label: `Sent file ${i + 1} of ${inputs.length}`,
+    });
   }
   return fileIds;
 }
@@ -222,6 +254,7 @@ async function extractWithSchema(params: {
   schema: unknown;
   systemPrompt: string;
   preset: DocumentParsePreset;
+  onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>;
 }): Promise<Record<string, unknown>> {
   const client = getClient();
   const mapping = mapPresetToReducto(params.preset);
@@ -233,10 +266,24 @@ async function extractWithSchema(params: {
     input = params.fileIds[0];
   } else {
     input = [];
-    for (const fileId of params.fileIds) {
+    for (let i = 0; i < params.fileIds.length; i++) {
+      const fileId = params.fileIds[i]!;
+      await mapRange(
+        params.onProgress,
+        0,
+        55,
+        (i / params.fileIds.length) * 100,
+        `Reading document ${i + 1} of ${params.fileIds.length}…`,
+      );
       input.push(await parseFileToJobId(client, fileId, params.preset));
     }
+    await mapRange(params.onProgress, 0, 55, 100, "Documents ready");
   }
+
+  await params.onProgress?.({
+    percent: params.fileIds.length === 1 ? 15 : 60,
+    label: "Extracting answers…",
+  });
 
   const response = await client.extract.run({
     input,
@@ -273,6 +320,7 @@ async function extractWithSchema(params: {
   if (!("result" in response)) {
     throw new Error("Document extraction is still processing. Try again in a moment.");
   }
+  await params.onProgress?.({ percent: 100, label: "Extraction complete" });
   return unwrapExtractResult(response.result);
 }
 
@@ -283,13 +331,17 @@ async function extractWithSchema(params: {
 export async function extractAnswerKeyQuestions(
   inputs: ReductoUploadInput[],
   preset: DocumentParsePreset = "typed_pdf",
+  onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>,
 ): Promise<ParsedImportQuestion[]> {
-  const fileIds = await uploadFiles(inputs);
+  const fileIds = await uploadFiles(inputs, (progress) =>
+    mapRange(onProgress, 0, 40, progress.percent, progress.label),
+  );
   const data = await extractWithSchema({
     fileIds,
     schema: QUESTIONS_SCHEMA,
     systemPrompt: ANSWER_KEY_SYSTEM_PROMPT,
     preset: coerceParsePreset(preset, "answer_key_pdf"),
+    onProgress: (progress) => mapRange(onProgress, 40, 100, progress.percent, progress.label),
   });
   return normalizeParsedQuestions(data.questions);
 }
@@ -486,15 +538,19 @@ function clampConfidence(value: unknown): number {
 export async function extractHandwrittenAnswers(
   images: ImagePayload[],
   preset: DocumentParsePreset = "handwritten_open",
+  onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>,
 ): Promise<OcrAnswer[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "student_ocr");
-  const fileIds = await uploadFiles(imagesToUploads(images));
+  const fileIds = await uploadFiles(imagesToUploads(images), (progress) =>
+    mapRange(onProgress, 0, 40, progress.percent, progress.label),
+  );
   const data = await extractWithSchema({
     fileIds,
     schema: FLAT_ANSWERS_SCHEMA,
     systemPrompt: STUDENT_PAPER_OCR_PROMPT,
     preset: resolved,
+    onProgress: (progress) => mapRange(onProgress, 40, 100, progress.percent, progress.label),
   });
   return coerceOcrAnswers(data.answers);
 }
@@ -506,10 +562,13 @@ export async function extractHandwrittenAnswers(
 export async function extractHandwrittenStack(
   images: ImagePayload[],
   preset: DocumentParsePreset = "handwritten_open",
+  onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>,
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "grade_stack");
-  const fileIds = await uploadFiles(imagesToUploads(images));
+  const fileIds = await uploadFiles(imagesToUploads(images), (progress) =>
+    mapRange(onProgress, 0, 40, progress.percent, progress.label),
+  );
   const data = await extractWithSchema({
     fileIds,
     schema: STACK_PAGES_SCHEMA,
@@ -520,6 +579,7 @@ export async function extractHandwrittenStack(
       "Also read the student's handwritten name at the top of each page. " +
       "If the name is clear use confidence ≥ 0.9; messy but guessable 0.4–0.7; missing/unreadable → empty studentName and confidence 0.",
     preset: resolved,
+    onProgress: (progress) => mapRange(onProgress, 40, 100, progress.percent, progress.label),
   });
 
   const pageEntries = citedArray(data.pages);
@@ -591,6 +651,12 @@ export async function extractStudentFirstPreview(
   images: ImagePayload[],
   assignments: { pageIndex: number; studentId: string; parsePreset?: string }[],
   preset: DocumentParsePreset = "handwritten_open",
+  onStudentProgress?: (progress: {
+    completed: number;
+    total: number;
+    currentStudentId: string;
+    completedStudentIds: string[];
+  }) => void | Promise<void>,
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
   const fallback = coerceParsePreset(preset, "grade_stack");
@@ -609,13 +675,29 @@ export async function extractStudentFirstPreview(
   }
 
   const pageResults = new Map<number, OcrPage>();
-  for (const { pageIndices, parsePreset } of byStudent.values()) {
+  const studentEntries = [...byStudent.entries()];
+  const completedStudentIds: string[] = [];
+  for (let i = 0; i < studentEntries.length; i++) {
+    const [studentId, { pageIndices, parsePreset }] = studentEntries[i]!;
+    await onStudentProgress?.({
+      completed: i,
+      total: studentEntries.length,
+      currentStudentId: studentId,
+      completedStudentIds: [...completedStudentIds],
+    });
     const studentImages = pageIndices.map((index) => images[index]).filter(Boolean);
     const pages = await extractHandwrittenStudentBucket(studentImages, pageIndices, parsePreset);
     for (const page of pages) {
       pageResults.set(page.pageIndex, page);
     }
+    completedStudentIds.push(studentId);
   }
+  await onStudentProgress?.({
+    completed: studentEntries.length,
+    total: studentEntries.length,
+    currentStudentId: studentEntries[studentEntries.length - 1]?.[0] ?? "",
+    completedStudentIds,
+  });
 
   return images.map((_image, index) =>
     pageResults.get(index) ?? {

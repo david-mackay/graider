@@ -1,7 +1,7 @@
 export const ONBOARDING_VAULT_VERSION = 2 as const;
 /** Soft cap for the free onboarding demo review screen (not a Reducto limit). */
 export const ONBOARDING_MAX_ANSWER_KEYS = 200;
-export const ONBOARDING_MAX_STUDENTS = 5;
+export const ONBOARDING_MAX_STUDENTS = 3;
 
 export type OnboardingAnswerKey = {
   prompt: string;
@@ -72,7 +72,8 @@ export type OnboardingStudentSubmission = {
   /** All pages for this student's paper (multi-page support). */
   papers?: OnboardingPaper[];
   typedAnswers?: string[];
-  /** Set after the class is graded — absent while still collecting the roster. */
+  parsePreset?: string;
+  /** Set after this student is graded — others can still be waiting. */
   grade?: OnboardingSampleGrade;
 };
 
@@ -180,8 +181,7 @@ export function hasGradedStudents(
   vault: Pick<OnboardingVault, "students"> | null | undefined,
 ): boolean {
   const roster = normalizeRoster(vault);
-  if (roster.length === 0) return false;
-  return roster.every(
+  return roster.some(
     (s) =>
       !!s.grade &&
       Number.isInteger(s.grade.marksEarned) &&
