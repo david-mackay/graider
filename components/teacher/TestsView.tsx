@@ -9,6 +9,7 @@ import TestAdministerPanel from "@/components/teacher/TestAdministerPanel";
 import TestViewEditor from "@/components/teacher/TestViewEditor";
 import AttemptGradeEditor from "@/components/teacher/AttemptGradeEditor";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
+import { attemptSourceLabel, formatAttemptWhen } from "@/lib/attempt-labels";
 import {
   defaultPresetForSurface,
   type DocumentParsePreset,
@@ -530,7 +531,14 @@ export default function TestsView({
                             {attempt.status}
                           </Badge>
                         </div>
-                        <p className="mt-0.5 text-xs text-ink-faint">Student: {studentLabel(attempt.student_id)}</p>
+                        <p className="mt-0.5 text-xs text-ink-faint">
+                          Student: {studentLabel(attempt.student_id)}
+                          {" · "}
+                          {attemptSourceLabel(attempt.source)}
+                          {formatAttemptWhen(attempt.graded_at ?? attempt.submitted_at)
+                            ? ` · ${formatAttemptWhen(attempt.graded_at ?? attempt.submitted_at)}`
+                            : ""}
+                        </p>
                         {attempt.status === "graded" ? (
                           <p className="mt-1 font-hand -rotate-2 text-2xl font-bold text-pen">
                             {attempt.total_marks}/{attempt.max_marks}

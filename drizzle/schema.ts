@@ -1,4 +1,4 @@
-import { boolean, index, jsonb, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const appUsers = pgTable("app_users", {
@@ -162,10 +162,11 @@ export const testAttempts = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (table) => ({
-    testStudentUnique: unique("test_attempts_test_id_student_id_uniq").on(
-      table.testId,
-      table.studentId,
-    ),
+    testStudentIdx: index("test_attempts_test_id_student_id_idx").on(table.testId, table.studentId),
+    /** One digital take per student per test. Paper scans may stack as extra rows. */
+    testStudentDigitalUnique: uniqueIndex("test_attempts_digital_test_student_uniq")
+      .on(table.testId, table.studentId)
+      .where(sql`${table.source} = 'student'`),
   }),
 );
 

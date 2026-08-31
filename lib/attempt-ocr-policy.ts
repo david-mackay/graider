@@ -1,6 +1,7 @@
 /**
- * Whether OCR / stack commit may write answers onto an existing attempt.
+ * Whether OCR may write answers onto an existing named attempt.
  * Digital student attempts must never be clobbered (GR-04..GR-06).
+ * Stack commit creates a new teacher_ocr attempt instead of using this gate.
  */
 export function canApplyOcrToAttempt(params: {
   source: string | null | undefined;

@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { tests, testAttempts, classMemberships } from "@/drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { digitalStudentAttemptWhere } from "@/lib/attempt-queries";
 import { canSubmitAttempt, getAttemptDeadline, isTestAvailableNow } from "@/lib/test-availability";
 import { listDraftAnswers } from "@/lib/draft-answers";
 import { assertStudentClassEnrollment } from "@/lib/submission-access-policy";
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     const [existing] = await db
       .select()
       .from(testAttempts)
-      .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, student.id)))
+      .where(digitalStudentAttemptWhere(testId, student.id))
       .limit(1);
 
     if (existing) {
@@ -117,11 +118,11 @@ export async function POST(request: NextRequest) {
         answers: [],
       });
     } catch {
-      // Concurrent start race on unique (test_id, student_id) — resume the winner.
+      // Concurrent start race on the digital-attempt unique — resume the winner.
       const [raced] = await db
         .select()
         .from(testAttempts)
-        .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, student.id)))
+        .where(digitalStudentAttemptWhere(testId, student.id))
         .limit(1);
       if (raced && !raced.submittedAt) {
         const deadline = getAttemptDeadline(test, raced.startedAt);

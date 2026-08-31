@@ -27,6 +27,7 @@ import StudentClassesView from "@/components/student/ClassesView";
 import TestList from "@/components/student/TestList";
 import TestTakingForm from "@/components/student/TestTakingForm";
 import AttemptDetailCard from "@/components/student/AttemptDetailCard";
+import { pickStudentFacingAttempt } from "@/lib/pick-student-facing-attempt";
 
 export default function StudentDashboard() {
   const { isLoaded, isSignedIn } = useUser();
@@ -85,7 +86,7 @@ export default function StudentDashboard() {
     () =>
       testsInScope.map((test) => ({
         test,
-        attempt: attemptsInScope.find((a) => a.test_id === test.id) ?? null,
+        attempt: pickStudentFacingAttempt(attemptsInScope, test.id),
       })),
     [testsInScope, attemptsInScope],
   );

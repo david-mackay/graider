@@ -8,11 +8,10 @@ import {
   testQuestions,
   tests,
 } from "@/drizzle/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { extractHandwrittenStack } from "@/lib/reducto";
 import { coerceParsePreset, type DocumentParsePreset } from "@/lib/parse-presets";
 import { gradeOneAttempt } from "@/lib/grading";
-import { canApplyOcrToAttempt } from "@/lib/attempt-ocr-policy";
 import {
   OcrAnswer,
   RosterEntry,
@@ -112,10 +111,34 @@ function minNullable(...values: Array<number | null>): number | null {
  * (1-based or 0-based) — critical for MCQ sheets where stems OCR poorly.
  * Multiple OCR rows for the same question are concatenated, not overwritten.
  */
+function printedIndexesCollapsedToOne(extracted: OcrAnswer[]): boolean {
+  const indexes = extracted
+    .map((entry) =>
+      typeof entry.question_index === "number" && Number.isFinite(entry.question_index)
+        ? Math.trunc(entry.question_index)
+        : null,
+    )
+    .filter((n): n is number => n !== null);
+  return indexes.length > 1 && new Set(indexes).size === 1;
+}
+
 export function matchOcrAnswersToQuestions(
   extracted: OcrAnswer[],
   questions: { questionId: string; prompt: string }[],
 ): { questionId: string; studentAnswer: string }[] {
+  const zipByOrder =
+    printedIndexesCollapsedToOne(extracted) &&
+    extracted.length === questions.length &&
+    questions.length > 1;
+  if (zipByOrder) {
+    return questions
+      .map((q, i) => ({
+        questionId: q.questionId,
+        studentAnswer: (extracted[i]?.answer ?? "").trim(),
+      }))
+      .filter((row) => row.studentAnswer);
+  }
+
   const merged = mergeOcrAnswersByQuestionNumber(extracted);
   const byPrompt = new Map<string, string>();
   for (const q of questions) {
@@ -490,50 +513,36 @@ export async function commitStack(params: {
   for (const [studentId, studentPages] of pagesByStudent) {
     await reportProgress(studentId);
 
-    // Idempotent attempt creation: same pattern as teacher-attempt.
-    const [existing] = await db
-      .select({
-        id: testAttempts.id,
-        source: testAttempts.source,
-        submittedAt: testAttempts.submittedAt,
-      })
-      .from(testAttempts)
+    // Onboarding sync used to default source=student. Relabel paper rows so
+    // they are not treated as a digital take. Never touch rows with startedAt.
+    await db
+      .update(testAttempts)
+      .set({ source: "teacher_ocr", updatedAt: new Date() })
       .where(
-        and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, studentId)),
-      )
-      .limit(1);
+        and(
+          eq(testAttempts.testId, testId),
+          eq(testAttempts.studentId, studentId),
+          eq(testAttempts.source, "student"),
+          isNull(testAttempts.startedAt),
+        ),
+      );
 
-    let attemptId: string;
-    let created: boolean;
+    const [inserted] = await db
+      .insert(testAttempts)
+      .values({
+        testId,
+        studentId,
+        source: "teacher_ocr",
+        status: "submitted",
+        submittedAt: new Date(),
+      })
+      .returning({ id: testAttempts.id });
 
-    if (existing) {
-      const gate = canApplyOcrToAttempt({
-        source: existing.source,
-        submittedAt: existing.submittedAt,
-      });
-      if (!gate.ok) {
-        throw new Error(gate.reason);
-      }
-      attemptId = existing.id;
-      created = false;
-    } else {
-      const [inserted] = await db
-        .insert(testAttempts)
-        .values({
-          testId,
-          studentId,
-          source: "teacher_ocr",
-          status: "submitted",
-          submittedAt: new Date(),
-        })
-        .returning({ id: testAttempts.id });
-
-      if (!inserted) {
-        throw new Error("Failed to create attempt for student.");
-      }
-      attemptId = inserted.id;
-      created = true;
+    if (!inserted) {
+      throw new Error("Failed to create attempt for student.");
     }
+    const attemptId = inserted.id;
+    const created = true;
 
     if (studentPages.storagePaths.length > 0) {
       const [attemptRow] = await db

@@ -90,6 +90,26 @@ describe("stack-grading matchOcrAnswersToQuestions", () => {
   it("normalizeQuestion strips punctuation", () => {
     assert.equal(normalizeQuestion(" Hello, World! "), "hello world");
   });
+
+  it("zips by order when OCR stamps every row with the same question_index", () => {
+    const questions = [
+      { questionId: "q1", prompt: "Q1" },
+      { questionId: "q2", prompt: "Q2" },
+      { questionId: "q3", prompt: "Q3" },
+    ];
+    const rows = matchOcrAnswersToQuestions(
+      [
+        { question: "unclear", answer: "alpha", question_index: 1 },
+        { question: "unclear", answer: "beta", question_index: 1 },
+        { question: "unclear", answer: "gamma", question_index: 1 },
+      ],
+      questions,
+    );
+    assert.deepEqual(
+      rows.map((row) => row.studentAnswer),
+      ["alpha", "beta", "gamma"],
+    );
+  });
 });
 
 describe("buildStudentFirstPreviewPages storage paths", () => {

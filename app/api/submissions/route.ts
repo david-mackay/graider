@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { tests, testAttempts, testQuestions, attemptAnswers, classMemberships, appUsers } from "@/drizzle/schema";
 import { eq, and, inArray, desc, isNull } from "drizzle-orm";
 import { canSubmitAttempt } from "@/lib/test-availability";
+import { digitalStudentAttemptWhere } from "@/lib/attempt-queries";
 import {
   assertNotAlreadySubmitted,
   assertStudentClassEnrollment,
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
     const [attempt] = await db
       .select()
       .from(testAttempts)
-      .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, student.id)))
+      .where(digitalStudentAttemptWhere(testId, student.id))
       .limit(1);
 
     // Submissions must go through /api/submissions/start first (schedule gate lives there).

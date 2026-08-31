@@ -10,6 +10,7 @@ import { Badge, Card, btnSecondary, btnPrimary } from "@/components/shared/ui";
 import { IconChevronDown, IconChevronRight } from "@/components/shared/icons";
 import AttemptGradeEditor from "@/components/teacher/AttemptGradeEditor";
 import { handleJson } from "@/lib/dashboard-client";
+import { attemptSourceLabel, formatAttemptWhen } from "@/lib/attempt-labels";
 import type { ClassMember, DashboardAttempt, GradedAttemptDetail } from "@/lib/dashboard-types";
 
 type StudentProfilePanelProps = {
@@ -32,7 +33,14 @@ function groupByTest(attempts: DashboardAttempt[]): TestGroup[] {
     existing.attempts.push(a);
     map.set(a.test_id, existing);
   }
-  return Array.from(map.values());
+  return Array.from(map.values()).map((group) => ({
+    ...group,
+    attempts: [...group.attempts].sort((a, b) => {
+      const aAt = a.graded_at ?? a.submitted_at ?? "";
+      const bAt = b.graded_at ?? b.submitted_at ?? "";
+      return bAt.localeCompare(aAt);
+    }),
+  }));
 }
 
 export default function StudentProfilePanel({
@@ -191,6 +199,12 @@ export default function StudentProfilePanel({
                                 </span>
                               ) : null}
                             </div>
+                            <p className="mt-1 text-xs text-ink-faint">
+                              {attemptSourceLabel(attempt.source)}
+                              {formatAttemptWhen(attempt.graded_at ?? attempt.submitted_at)
+                                ? ` · ${formatAttemptWhen(attempt.graded_at ?? attempt.submitted_at)}`
+                                : ""}
+                            </p>
                           </div>
                           {attempt.status === "submitted" || attempt.status === "graded" ? (
                             <button

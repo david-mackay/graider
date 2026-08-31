@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/onboarding/rate-limit";
 import type { OnboardingAnswerKey, OnboardingQuestionGrade } from "@/lib/onboarding/types";
 import type { SampleGradeResponse } from "@/lib/types";
 import { ndjsonStreamResponse, wantsNdjsonProgress } from "@/lib/http/ndjson-progress";
+import { assignOcrAnswersToKeys } from "@/lib/ocr-answer-assign";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -283,14 +284,7 @@ export async function POST(request: NextRequest) {
             emit({ type: "result", ...softFail });
             return;
           }
-          const studentAnswers = answerKeys.map((_key, index) => {
-            const byIndex = answers.find((a) => {
-              if (typeof a.question_index !== "number") return false;
-              const raw = Math.trunc(a.question_index);
-              return raw === index || raw === index + 1;
-            });
-            return byIndex?.answer ?? answers[index]?.answer ?? "";
-          });
+          const studentAnswers = assignOcrAnswersToKeys(answers, answerKeys.length);
           const response = await gradeAgainstKeys(answerKeys, studentAnswers);
           emit({ type: "progress", percent: 100, label: "Done" });
           emit({ type: "result", ...response });
@@ -326,14 +320,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(softFail, { status: 200 });
     }
 
-    const studentAnswers = answerKeys.map((_key, index) => {
-      const byIndex = answers.find((a) => {
-        if (typeof a.question_index !== "number") return false;
-        const raw = Math.trunc(a.question_index);
-        return raw === index || raw === index + 1;
-      });
-      return byIndex?.answer ?? answers[index]?.answer ?? "";
-    });
+    const studentAnswers = assignOcrAnswersToKeys(answers, answerKeys.length);
     const response = await gradeAgainstKeys(answerKeys, studentAnswers);
     return NextResponse.json(response, { status: 200 });
   } catch {

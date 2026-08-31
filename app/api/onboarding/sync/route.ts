@@ -194,6 +194,7 @@ export async function POST(request: NextRequest) {
           .values({
             testId: testRow.id,
             studentId,
+            source: "teacher_ocr",
             status: "graded",
             totalMarks: Math.min(student.grade.marksEarned, totalMax),
             maxMarks: totalMax,

@@ -52,25 +52,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [existing] = await db
-      .select({ id: testAttempts.id })
-      .from(testAttempts)
-      .where(
-        and(
-          eq(testAttempts.testId, testId),
-          eq(testAttempts.studentId, studentId),
-        ),
-      )
-      .limit(1);
-
-    if (existing) {
-      const response: TeacherAttemptResponse = {
-        attempt_id: existing.id,
-        created: false,
-      };
-      return NextResponse.json(response);
-    }
-
     const [inserted] = await db
       .insert(testAttempts)
       .values({

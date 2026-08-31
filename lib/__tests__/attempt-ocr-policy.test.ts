@@ -25,4 +25,14 @@ describe("M6 attempt-ocr-policy (GR-04 GR-05 GR-06)", () => {
     assert.equal(canApplyOcrToAttempt({ source: "teacher_ocr", submittedAt: null }).ok, true);
     assert.equal(canApplyOcrToAttempt({ source: "teacher_ocr", submittedAt: new Date() }).ok, true);
   });
+
+  it("does not block creating a separate paper attempt beside a digital one", () => {
+    const digital = canApplyOcrToAttempt({
+      source: "student",
+      submittedAt: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    assert.equal(digital.ok, false);
+    const paper = canApplyOcrToAttempt({ source: "teacher_ocr", submittedAt: new Date() });
+    assert.equal(paper.ok, true);
+  });
 });
