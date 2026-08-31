@@ -284,6 +284,41 @@ describe("M3 questions + M4 tests L2", () => {
     assert.equal(body.test.status, "open");
   });
 
+  it("T-07 teacher can reorder questions on a test", async () => {
+    setActor(actors.teacherA);
+    setClassRole(ids.classA, "teacher");
+    const questionB = "question-bbbb-bbbb-bbbb-bbbbbbbb";
+    scriptedDb.enqueueSelect(
+      [testRow()],
+      [{ questionId: ids.questionA }, { questionId: questionB }],
+    );
+    scriptedDb.updateReturning = [testRow()];
+    const res = await testPATCH(
+      jsonRequest(
+        `http://localhost/api/tests/${ids.testA}`,
+        { question_ids: [questionB, ids.questionA] },
+        "PATCH",
+      ),
+      { params: { testId: ids.testA } },
+    );
+    assert.equal(res.status, 200);
+  });
+
+  it("T-08 reorder rejects a partial question list", async () => {
+    setActor(actors.teacherA);
+    setClassRole(ids.classA, "teacher");
+    scriptedDb.enqueueSelect([testRow()], [{ questionId: ids.questionA }]);
+    const res = await testPATCH(
+      jsonRequest(
+        `http://localhost/api/tests/${ids.testA}`,
+        { question_ids: [] },
+        "PATCH",
+      ),
+      { params: { testId: ids.testA } },
+    );
+    assert.equal(res.status, 400);
+  });
+
   it("Q-06 / T-04 answer keys never on student-facing detail (alias)", async () => {
     // Covered by T-04; keep an explicit catalog alias assertion.
     setActor(actors.studentA);

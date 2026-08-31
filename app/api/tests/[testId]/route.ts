@@ -10,6 +10,7 @@ import {
   normalizeTestStatus,
 } from "@/lib/test-availability";
 import { invalidateClassCatalog } from "@/lib/classes/invalidate";
+import { isQuestionIdPermutation, parseQuestionIds } from "@/lib/test-question-order";
 
 type Params = { testId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -143,7 +144,43 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       duration_minutes?: number | null;
       allow_late_submit?: boolean;
       title?: string;
+      question_ids?: unknown;
+      questionIds?: unknown;
     };
+
+    const questionIds = parseQuestionIds(body.question_ids ?? body.questionIds);
+    if ((body.question_ids ?? body.questionIds) !== undefined && questionIds === null) {
+      return NextResponse.json(
+        { error: "question_ids must be an array of question ids." },
+        { status: 400 },
+      );
+    }
+
+    let reordered = false;
+    if (questionIds) {
+      const existingRows = await db
+        .select({ questionId: testQuestions.questionId })
+        .from(testQuestions)
+        .where(eq(testQuestions.testId, testId));
+      const existingIds = existingRows.map((row) => row.questionId);
+      if (!isQuestionIdPermutation(existingIds, questionIds)) {
+        return NextResponse.json(
+          { error: "question_ids must list every question on this test exactly once." },
+          { status: 400 },
+        );
+      }
+      await db.transaction(async (tx) => {
+        for (let index = 0; index < questionIds.length; index += 1) {
+          await tx
+            .update(testQuestions)
+            .set({ sortOrder: index })
+            .where(
+              and(eq(testQuestions.testId, testId), eq(testQuestions.questionId, questionIds[index])),
+            );
+        }
+      });
+      reordered = true;
+    }
 
     const updates: Partial<typeof tests.$inferInsert> = {
       updatedAt: new Date(),
@@ -200,7 +237,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     }
 
     const keys = Object.keys(updates).filter((k) => k !== "updatedAt");
-    if (keys.length === 0) {
+    if (keys.length === 0 && !reordered) {
       return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
     }
 
