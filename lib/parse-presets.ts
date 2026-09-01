@@ -1,6 +1,7 @@
 /**
- * Document-type presets for Reducto parse/extract.
- * Teachers pick a preset before upload; we map it to agentic OCR / deep extract.
+ * One Reducto pipeline for every upload: handwriting over print,
+ * whether the container is a multi-page PDF or an array of photos.
+ * Legacy preset ids are still accepted on the wire and ignored.
  */
 
 export const DOCUMENT_PARSE_PRESETS = [
@@ -12,6 +13,9 @@ export const DOCUMENT_PARSE_PRESETS = [
 ] as const;
 
 export type DocumentParsePreset = (typeof DOCUMENT_PARSE_PRESETS)[number];
+
+/** Canonical id stored on jobs after the unified pipeline. */
+export const UNIFIED_PARSE_PRESET: DocumentParsePreset = "handwritten_open";
 
 export type ParseSurface =
   | "answer_key_pdf"
@@ -29,29 +33,9 @@ export type ParsePresetOption = {
 
 export const PARSE_PRESET_OPTIONS: ParsePresetOption[] = [
   {
-    id: "typed_pdf",
-    label: "Typed PDF",
-    hint: "Clean digital text — fastest, no extra OCR pass.",
-  },
-  {
-    id: "scanned_or_photo",
-    label: "Scanned / photo",
-    hint: "Faded scans, scan PDFs, or camera photos of printed pages.",
-  },
-  {
-    id: "mcq_letter_key",
-    label: "MCQ letter key",
-    hint: "Letter-only keys like 1. B  2. A — long lists OK.",
-  },
-  {
-    id: "circled_mcq",
-    label: "Circled / bubbled MCQ",
-    hint: "Circles, bubbles, or highlighted option letters.",
-  },
-  {
-    id: "handwritten_open",
-    label: "Handwritten answers",
-    hint: "Open written responses in pen or pencil.",
+    id: UNIFIED_PARSE_PRESET,
+    label: "Printed + handwriting",
+    hint: "PDF pages or photos. Reads printed stems and handwritten marks together.",
   },
 ];
 
@@ -61,51 +45,20 @@ export function isDocumentParsePreset(value: unknown): value is DocumentParsePre
   return typeof value === "string" && PRESET_SET.has(value);
 }
 
-export function defaultPresetForSurface(surface: ParseSurface): DocumentParsePreset {
-  switch (surface) {
-    case "answer_key_pdf":
-    case "question_bank_import":
-    case "test_import":
-      return "typed_pdf";
-    case "answer_key_photo":
-      return "scanned_or_photo";
-    case "student_ocr":
-    case "grade_stack":
-      return "handwritten_open";
-    default:
-      return "typed_pdf";
-  }
+export function defaultPresetForSurface(_surface?: ParseSurface): DocumentParsePreset {
+  return UNIFIED_PARSE_PRESET;
 }
 
-const MCQ_PARSE_PRESETS = new Set<DocumentParsePreset>(["mcq_letter_key", "circled_mcq"]);
-
-const STUDENT_OCR_SURFACES = new Set<ParseSurface>(["student_ocr", "grade_stack"]);
-
-export function presetsForSurface(surface: ParseSurface): ParsePresetOption[] {
-  if (STUDENT_OCR_SURFACES.has(surface)) {
-    return PARSE_PRESET_OPTIONS.filter((option) => !MCQ_PARSE_PRESETS.has(option.id));
-  }
-  return PARSE_PRESET_OPTIONS.filter((option) => option.id !== "circled_mcq");
+export function presetsForSurface(_surface: ParseSurface): ParsePresetOption[] {
+  return PARSE_PRESET_OPTIONS;
 }
 
-/** Coerce FormData / job payload values; unknown → surface default. */
+/** Incoming job/FormData values are accepted but always run the unified pipeline. */
 export function coerceParsePreset(
-  raw: unknown,
-  surface: ParseSurface,
+  _raw?: unknown,
+  _surface?: ParseSurface,
 ): DocumentParsePreset {
-  let resolved: DocumentParsePreset;
-  if (isDocumentParsePreset(raw)) resolved = raw;
-  else if (typeof raw === "string" && isDocumentParsePreset(raw.trim())) {
-    resolved = raw.trim() as DocumentParsePreset;
-  } else {
-    resolved = defaultPresetForSurface(surface);
-  }
-  // Circled/bubbled MCQ is not reliable in Reducto yet, and picking it for
-  // handwritten papers splits “choose N of M” items into fake extra questions.
-  if (STUDENT_OCR_SURFACES.has(surface) && MCQ_PARSE_PRESETS.has(resolved)) {
-    return defaultPresetForSurface(surface);
-  }
-  return resolved;
+  return UNIFIED_PARSE_PRESET;
 }
 
 export type ReductoParseMapping = {
@@ -116,59 +69,19 @@ export type ReductoParseMapping = {
   promptSuffix: string;
 };
 
-export function mapPresetToReducto(preset: DocumentParsePreset): ReductoParseMapping {
-  switch (preset) {
-    case "typed_pdf":
-      return {
-        agenticText: false,
-        includeImages: false,
-        intelligentOrdering: false,
-        deepExtract: false,
-        promptSuffix:
-          "Document is a clean typed PDF with embedded text. Prefer exact printed content. " +
-          "For MCQ questions with printed options, always fill choices with every A–E option's full text.",
-      };
-    case "scanned_or_photo":
-      return {
-        agenticText: true,
-        includeImages: true,
-        intelligentOrdering: true,
-        deepExtract: true,
-        promptSuffix:
-          "Document is a scan, scan PDF, or photo — correct OCR errors; read faded or skewed text carefully.",
-      };
-    case "mcq_letter_key":
-      return {
-        agenticText: true,
-        includeImages: false,
-        intelligentOrdering: true,
-        deepExtract: true,
-        promptSuffix:
-          "This is an MCQ letter-only answer key (e.g. 1. B  2. A). " +
-          "One row per number; prompt like 'Question N'; correct_answer is the letter only; choices null. " +
-          "Extract every item — do not truncate long lists.",
-      };
-    case "circled_mcq":
-      return {
-        agenticText: true,
-        includeImages: true,
-        intelligentOrdering: true,
-        deepExtract: false,
-        promptSuffix:
-          "Focus on circled, bubbled, crossed, or highlighted option letters. " +
-          "Answer is the selected letter only (A–E). Always set question_index from printed numbers. " +
-          "If the stem is unclear, use prompt 'Question N'.",
-      };
-    case "handwritten_open":
-      return {
-        agenticText: true,
-        includeImages: true,
-        intelligentOrdering: true,
-        deepExtract: false,
-        promptSuffix:
-          "Focus on handwritten open answers. Transcribe student writing exactly; do not invent missing text.",
-      };
-    default:
-      return mapPresetToReducto("typed_pdf");
-  }
+export const UNIFIED_REDUCTO_MAPPING: ReductoParseMapping = {
+  agenticText: true,
+  includeImages: true,
+  intelligentOrdering: true,
+  deepExtract: true,
+  promptSuffix:
+    "The file may be a multi-page PDF or a set of photos of the same paper. " +
+    "Printed stems, typed text, scans, and handwriting can appear on the same page. " +
+    "Read printed content carefully and transcribe handwritten answers exactly. " +
+    "For multiple choice, return the selected letter only when circled, bubbled, crossed, or highlighted. " +
+    "Do not invent missing text. Extract every item — do not truncate.",
+};
+
+export function mapPresetToReducto(_preset?: DocumentParsePreset): ReductoParseMapping {
+  return UNIFIED_REDUCTO_MAPPING;
 }

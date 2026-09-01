@@ -5,27 +5,28 @@ import {
   defaultPresetForSurface,
   isDocumentParsePreset,
   mapPresetToReducto,
-  presetsForSurface,
+  UNIFIED_PARSE_PRESET,
+  UNIFIED_REDUCTO_MAPPING,
 } from "@/lib/parse-presets";
 
 describe("parse-presets", () => {
-  it("validates and defaults presets", () => {
+  it("accepts legacy ids but always runs the unified pipeline", () => {
     assert.equal(isDocumentParsePreset("circled_mcq"), true);
     assert.equal(isDocumentParsePreset("nope"), false);
-    assert.equal(defaultPresetForSurface("grade_stack"), "handwritten_open");
-    assert.equal(coerceParsePreset("typed_pdf", "student_ocr"), "typed_pdf");
-    assert.equal(coerceParsePreset("garbage", "student_ocr"), "handwritten_open");
-    assert.equal(coerceParsePreset("circled_mcq", "student_ocr"), "handwritten_open");
-    assert.equal(coerceParsePreset("mcq_letter_key", "grade_stack"), "handwritten_open");
-    assert.equal(presetsForSurface("grade_stack").some((option) => option.id === "circled_mcq"), false);
-    assert.equal(presetsForSurface("student_ocr").some((option) => option.id === "mcq_letter_key"), false);
+    assert.equal(defaultPresetForSurface("grade_stack"), UNIFIED_PARSE_PRESET);
+    assert.equal(coerceParsePreset("typed_pdf", "student_ocr"), UNIFIED_PARSE_PRESET);
+    assert.equal(coerceParsePreset("garbage", "answer_key_pdf"), UNIFIED_PARSE_PRESET);
+    assert.equal(coerceParsePreset("mcq_letter_key", "grade_stack"), UNIFIED_PARSE_PRESET);
   });
 
-  it("maps presets to reducto flags", () => {
-    const typed = mapPresetToReducto("typed_pdf");
-    assert.equal(typed.agenticText, false);
-    const circled = mapPresetToReducto("circled_mcq");
-    assert.equal(circled.agenticText, true);
-    assert.equal(circled.includeImages, true);
+  it("maps every preset to the thorough handwritten-over-print flags", () => {
+    for (const id of ["typed_pdf", "scanned_or_photo", "mcq_letter_key", "circled_mcq", "handwritten_open"] as const) {
+      const mapped = mapPresetToReducto(id);
+      assert.equal(mapped.agenticText, true);
+      assert.equal(mapped.includeImages, true);
+      assert.equal(mapped.intelligentOrdering, true);
+      assert.equal(mapped.deepExtract, true);
+      assert.equal(mapped.promptSuffix, UNIFIED_REDUCTO_MAPPING.promptSuffix);
+    }
   });
 });

@@ -3,6 +3,7 @@ import { normalizeParsedQuestions } from "@/lib/parsed-questions";
 import {
   coerceParsePreset,
   mapPresetToReducto,
+  UNIFIED_PARSE_PRESET,
   type DocumentParsePreset,
 } from "@/lib/parse-presets";
 import type { OcrAnswer, OcrPage, ParsedImportQuestion } from "@/lib/types";
@@ -16,7 +17,8 @@ export type ImagePayload = {
 };
 
 const ANSWER_KEY_SYSTEM_PROMPT =
-  "This is a teacher answer key or exam paper with model answers. " +
+  "This is a teacher answer key or exam paper with model answers, as a multi-page PDF or photos. " +
+  "Printed stems and handwritten or circled answers can appear together. " +
   "Extract every question in document order for a review screen the teacher will edit. " +
   "Prefer confident values; omit rather than invent. " +
   "For multiple-choice: set question_type to mcq, put the correct letter only in correct_answer (A–E), " +
@@ -29,7 +31,8 @@ const ANSWER_KEY_SYSTEM_PROMPT =
   "Extract every item — do not truncate the list.";
 
 const TEST_PAPER_SYSTEM_PROMPT =
-  "This is a student-facing test or exam paper (questions, often with multiple-choice options). " +
+  "This is a student-facing test or exam paper as a multi-page PDF or photos " +
+  "(questions, often with multiple-choice options; printed and handwritten content may mix). " +
   "Extract the test title from the header when present, and every question in document order. " +
   "Prefer confident values; omit rather than invent. " +
   "When a question shows options A–E (or A–D), set question_type to mcq and ALWAYS populate choices " +
@@ -330,7 +333,7 @@ async function extractWithSchema(params: {
  */
 export async function extractAnswerKeyQuestions(
   inputs: ReductoUploadInput[],
-  preset: DocumentParsePreset = "typed_pdf",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
   onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>,
 ): Promise<ParsedImportQuestion[]> {
   const fileIds = await uploadFiles(inputs, (progress) =>
@@ -348,7 +351,7 @@ export async function extractAnswerKeyQuestions(
 
 export async function extractQuestionBankFromDocument(
   input: ReductoUploadInput,
-  preset: DocumentParsePreset = "typed_pdf",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
 ): Promise<ParsedImportQuestion[]> {
   const questions = await extractAnswerKeyQuestions(
     [input],
@@ -362,7 +365,7 @@ export async function extractQuestionBankFromDocument(
 
 export async function extractTestFromDocument(
   input: ReductoUploadInput,
-  preset: DocumentParsePreset = "typed_pdf",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
 ): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
   const fileIds = await uploadFiles([input]);
   const data = await extractWithSchema({
@@ -487,8 +490,9 @@ const STUDENT_BUCKET_SCHEMA = {
 } as const;
 
 const STUDENT_PAPER_OCR_PROMPT =
-  "These are photographed student exam pages (printed MCQ sheets, bubble sheets, and/or handwriting). " +
+  "These are student exam pages: a multi-page PDF or photos of printed paper with handwriting on top. " +
   "Extract every answered item. Prefer question_index from the printed number. " +
+  "Read printed stems and typed text, and transcribe handwritten answers exactly. " +
   "For multiple-choice: the answer is the letter the student selected — circled, bubbled, crossed out alternatives, highlighted, or marked — return that letter only (A–E). " +
   "Do not treat option text as the answer. Do not invent questions or answers. " +
   "If the stem is hard to read but the number and selected letter are clear, use question='Question N' and answer=letter. " +
@@ -537,7 +541,7 @@ function clampConfidence(value: unknown): number {
 /** Flat Q/A extraction for a single attempt / onboarding sample grade. */
 export async function extractHandwrittenAnswers(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "handwritten_open",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
   onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>,
 ): Promise<OcrAnswer[]> {
   if (images.length === 0) return [];
@@ -561,7 +565,7 @@ export async function extractHandwrittenAnswers(
  */
 export async function extractHandwrittenStack(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "handwritten_open",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
   onProgress?: (progress: ReductoWorkProgress) => void | Promise<void>,
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
@@ -612,7 +616,7 @@ export async function extractHandwrittenStack(
 export async function extractHandwrittenStudentBucket(
   images: ImagePayload[],
   globalPageIndices: number[],
-  preset: DocumentParsePreset = "handwritten_open",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
 ): Promise<OcrPage[]> {
   if (images.length === 0) return [];
   const resolved = coerceParsePreset(preset, "grade_stack");
@@ -650,7 +654,7 @@ export async function extractHandwrittenStudentBucket(
 export async function extractStudentFirstPreview(
   images: ImagePayload[],
   assignments: { pageIndex: number; studentId: string; parsePreset?: string }[],
-  preset: DocumentParsePreset = "handwritten_open",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
   onStudentProgress?: (progress: {
     completed: number;
     total: number;
@@ -712,7 +716,7 @@ export async function extractStudentFirstPreview(
 /** Discover test title + questions from photographed student papers. */
 export async function parseTestFromStackImages(
   images: ImagePayload[],
-  preset: DocumentParsePreset = "handwritten_open",
+  preset: DocumentParsePreset = UNIFIED_PARSE_PRESET,
 ): Promise<{ title: string; questions: ParsedImportQuestion[] }> {
   if (images.length === 0) {
     throw new Error("At least one image is required to detect a test.");

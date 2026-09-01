@@ -395,8 +395,6 @@ export default function GradeWizard() {
               pageCount={activeStudent.pages.length}
               sendStatus={activeStudent.sendStatus}
               sendError={activeStudent.sendError}
-              parsePreset={activeStudent.parsePreset}
-              onParsePresetChange={(preset) => studentActions.setParsePreset(preset)}
               onFilesChange={studentActions.setActivePages}
               onSend={() => void studentActions.sendStudent(activeStudent.studentId)}
               onCancelSend={() => void studentActions.cancelSend(activeStudent.studentId)}
@@ -410,9 +408,6 @@ export default function GradeWizard() {
             <StepSessionSummary
               buckets={buckets}
               testTitle={studentTest.title}
-              onParsePresetChange={(preset, studentId) =>
-                studentActions.setParsePreset(preset, studentId)
-              }
               onAddStudent={studentActions.startAddStudent}
               onResumeStudent={studentActions.resumeStudent}
               onRemoveStudent={studentActions.removeBucket}

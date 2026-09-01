@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
-import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import {
   FormField,
   btnPrimary,
@@ -17,10 +16,7 @@ import {
   normalizeAnswerKeys,
   type OnboardingAnswerKey,
 } from "@/lib/onboarding/types";
-import {
-  defaultPresetForSurface,
-  type DocumentParsePreset,
-} from "@/lib/parse-presets";
+import { UNIFIED_PARSE_PRESET } from "@/lib/parse-presets";
 
 const DEFAULT_PROMPT = "Name two functions of the mitochondria.";
 const DEFAULT_CORRECT_ANSWER =
@@ -83,9 +79,6 @@ export default function OnboardingAnswerKeyPage() {
   const [manualType, setManualType] = useState<"open" | "mcq">("open");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
-    defaultPresetForSurface("answer_key_pdf"),
-  );
   const [staged, setStaged] = useState<StagedUpload[]>([]);
 
   useEffect(() => {
@@ -163,12 +156,9 @@ export default function OnboardingAnswerKeyPage() {
     }
   }
 
-  function addStagedFiles(files: File[], asImages: boolean) {
+  function addStagedFiles(files: File[], _asImages: boolean) {
     if (files.length === 0) return;
     setError(null);
-    if (asImages && parsePreset === "typed_pdf") {
-      setParsePreset(defaultPresetForSurface("answer_key_photo"));
-    }
     setStaged((prev) => {
       const remaining = MAX_STAGED_FILES - prev.length;
       if (remaining <= 0) return prev;
@@ -206,13 +196,7 @@ export default function OnboardingAnswerKeyPage() {
         formData.append("image", item.file, item.file.name || "key.jpg");
       }
     }
-    const hasImages = staged.some((item) => !isPdfFile(item.file));
-    const preset =
-      hasImages && parsePreset === "typed_pdf"
-        ? defaultPresetForSurface("answer_key_photo")
-        : parsePreset;
-    if (preset !== parsePreset) setParsePreset(preset);
-    formData.append("parsePreset", preset);
+    formData.append("parsePreset", UNIFIED_PARSE_PRESET);
     const label =
       staged.length === 1 ? staged[0]!.file.name : `${staged.length} files`;
     await parseUpload(formData, label);
@@ -320,13 +304,6 @@ export default function OnboardingAnswerKeyPage() {
               multiple
               className="sr-only"
               onChange={(e) => addStagedFiles(Array.from(e.target.files ?? []), true)}
-            />
-            <ParsePresetPicker
-              surface="answer_key_pdf"
-              value={parsePreset}
-              onChange={setParsePreset}
-              disabled={busy}
-              className="mt-4"
             />
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <button

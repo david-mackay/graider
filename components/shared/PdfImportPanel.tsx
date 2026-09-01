@@ -2,13 +2,8 @@
 
 import { useRef, useState } from "react";
 import { Card, btnSecondary } from "@/components/shared/ui";
-import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import { handleJson } from "@/lib/dashboard-client";
-import {
-  defaultPresetForSurface,
-  type DocumentParsePreset,
-  type ParseSurface,
-} from "@/lib/parse-presets";
+import { UNIFIED_PARSE_PRESET } from "@/lib/parse-presets";
 
 export type ContentImportKind = "question_bank" | "test";
 
@@ -48,11 +43,6 @@ type ActiveImport = {
 const ENDPOINTS: Record<ContentImportKind, string> = {
   question_bank: "question-bank/import",
   test: "tests/import",
-};
-
-const SURFACES: Record<ContentImportKind, ParseSurface> = {
-  question_bank: "question_bank_import",
-  test: "test_import",
 };
 
 function defaultLabels(
@@ -114,11 +104,7 @@ export default function PdfImportPanel({
   titleOverride,
 }: PdfImportPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const surface = SURFACES[kind];
   const [activeImports, setActiveImports] = useState<ActiveImport[]>([]);
-  const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
-    defaultPresetForSurface(surface),
-  );
   const labels = defaultLabels(kind, Boolean(targetTestId));
   const title = titleOverride ?? labels.title;
 
@@ -146,7 +132,7 @@ export default function PdfImportPanel({
     throw new Error("Import is taking longer than expected. Check back in a moment.");
   }
 
-  async function runImport(files: File[], preset: DocumentParsePreset) {
+  async function runImport(files: File[]) {
     const clientId = nextClientId();
     const label = files.length === 1 ? files[0]!.name : `${files.length} PDFs`;
     setActiveImports((prev) => [...prev, { clientId, label, phase: "uploading" }]);
@@ -157,7 +143,7 @@ export default function PdfImportPanel({
         formData.append("pdfs", file);
         formData.append("pdf", file); // backward-compat for single-file endpoints
       }
-      formData.append("parsePreset", preset);
+      formData.append("parsePreset", UNIFIED_PARSE_PRESET);
       if (targetTestId) formData.append("targetTestId", targetTestId);
 
       const created = await handleJson<{ jobId: string; status: string }>(
@@ -189,19 +175,12 @@ export default function PdfImportPanel({
     if (files.length === 0) return;
     // Clear immediately so another file can be chosen while this import runs.
     if (fileRef.current) fileRef.current.value = "";
-    void runImport(files, parsePreset);
+    void runImport(files);
   }
 
   return (
     <Card className="border-dashed border-line bg-cream/40">
       <p className="text-sm font-semibold text-ink">{title}</p>
-      <ParsePresetPicker
-        surface={surface}
-        value={parsePreset}
-        onChange={setParsePreset}
-        disabled={disabled}
-        className="mt-3"
-      />
       <input
         ref={fileRef}
         type="file"

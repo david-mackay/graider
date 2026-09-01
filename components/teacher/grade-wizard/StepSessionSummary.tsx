@@ -1,17 +1,14 @@
 "use client";
 
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
-import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import CopyableError from "@/components/shared/CopyableError";
 import SendStopButton from "@/components/teacher/grade-wizard/SendStopButton";
-import type { DocumentParsePreset } from "@/lib/parse-presets";
 import type { StudentBucket } from "@/lib/student-grade";
 import { totalPageCount } from "@/lib/student-grade";
 
 type StepSessionSummaryProps = {
   buckets: StudentBucket[];
   testTitle: string;
-  onParsePresetChange: (preset: DocumentParsePreset, studentId: string) => void;
   onAddStudent: () => void;
   onResumeStudent: (studentId: string) => void;
   onRemoveStudent: (studentId: string) => void;
@@ -27,7 +24,6 @@ type StepSessionSummaryProps = {
 export default function StepSessionSummary({
   buckets,
   testTitle,
-  onParsePresetChange,
   onAddStudent,
   onResumeStudent,
   onRemoveStudent,
@@ -95,13 +91,6 @@ export default function StepSessionSummary({
                   ) : null}
                 </div>
               </button>
-              <ParsePresetPicker
-                surface="student_ocr"
-                value={bucket.parsePreset}
-                onChange={(preset) => onParsePresetChange(preset, bucket.studentId)}
-                disabled={bucket.sendStatus === "sending"}
-                className="sm:w-52"
-              />
               <SendStopButton
                 status={bucket.sendStatus}
                 size="md"

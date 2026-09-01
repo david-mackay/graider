@@ -4,16 +4,12 @@ import { FormEvent, useState } from "react";
 import { Badge, Card, FormField, SectionHeader, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
 import { IconClipboard, IconCheck, IconPen, IconX } from "@/components/shared/icons";
 import PdfImportPanel from "@/components/shared/PdfImportPanel";
-import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import TestAdministerPanel from "@/components/teacher/TestAdministerPanel";
 import TestViewEditor from "@/components/teacher/TestViewEditor";
 import AttemptGradeEditor from "@/components/teacher/AttemptGradeEditor";
 import { handleJson, normalizeTopic } from "@/lib/dashboard-client";
 import { attemptSourceLabel, formatAttemptWhen } from "@/lib/attempt-labels";
-import {
-  defaultPresetForSurface,
-  type DocumentParsePreset,
-} from "@/lib/parse-presets";
+import { UNIFIED_PARSE_PRESET } from "@/lib/parse-presets";
 import type { OcrAnswer, TestDetail, TestStatus } from "@/lib/types";
 import type {
   ClassMember,
@@ -96,10 +92,6 @@ export default function TestsView({
   const [ocrFilesByAttempt, setOcrFilesByAttempt] = useState<Record<string, File[]>>({});
   const [ocrFeedback, setOcrFeedback] = useState<Record<string, string>>({});
   const [expandedOcrAttemptId, setExpandedOcrAttemptId] = useState<string | null>(null);
-  const [ocrParsePreset, setOcrParsePreset] = useState<DocumentParsePreset>(() =>
-    defaultPresetForSurface("student_ocr"),
-  );
-
   const filteredAttempts =
     submissionFilter === "all" ? attemptsInScope : attemptsInScope.filter((a) => a.status === submissionFilter);
 
@@ -289,7 +281,7 @@ export default function TestsView({
     setBusy(true);
     const formData = new FormData();
     formData.append("attemptId", attemptId);
-    formData.append("parsePreset", ocrParsePreset);
+    formData.append("parsePreset", UNIFIED_PARSE_PRESET);
     for (const file of files) formData.append("images", file);
     try {
       const payload = await handleJson<{ extracted: OcrAnswer[]; matched: number }>(
@@ -575,12 +567,6 @@ export default function TestsView({
                       </button>
                       {expandedOcrAttemptId === attempt.id ? (
                         <div className="mt-2 space-y-3">
-                          <ParsePresetPicker
-                            surface="student_ocr"
-                            value={ocrParsePreset}
-                            onChange={setOcrParsePreset}
-                            disabled={isBusy}
-                          />
                           <div className="flex flex-wrap items-center gap-3">
                           <input
                             type="file"

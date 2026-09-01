@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import OnboardingShell from "@/components/marketing/OnboardingShell";
 import PageStagingGrid from "@/components/shared/PageStagingGrid";
 import { Card, FormField, btnPrimary, btnSecondary, inputClass } from "@/components/shared/ui";
-import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import { IconX } from "@/components/shared/icons";
 import { getVault, setVault } from "@/lib/onboarding/vault";
 import { ONBOARDING_EVENTS, fireEvent } from "@/lib/onboarding/funnel-events";
@@ -19,10 +18,7 @@ import {
   type OnboardingSampleGrade,
   type OnboardingStudentSubmission,
 } from "@/lib/onboarding/types";
-import {
-  defaultPresetForSurface,
-  type DocumentParsePreset,
-} from "@/lib/parse-presets";
+import { UNIFIED_PARSE_PRESET } from "@/lib/parse-presets";
 import type { SampleGradeResponse } from "@/lib/types";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -70,9 +66,6 @@ export default function OnboardingUploadPage() {
   const [rateLimited, setRateLimited] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [gradingProgress, setGradingProgress] = useState<string | null>(null);
-  const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
-    defaultPresetForSurface("student_ocr"),
-  );
 
   useEffect(() => {
     fireEvent(ONBOARDING_EVENTS.PAPER_UPLOAD);
@@ -214,7 +207,7 @@ export default function OnboardingUploadPage() {
     if (student.source === "typed" && student.typedAnswers) {
       formData.append("typedAnswers", JSON.stringify(student.typedAnswers));
     } else if (student.papers?.length) {
-      formData.append("parsePreset", parsePreset);
+      formData.append("parsePreset", UNIFIED_PARSE_PRESET);
       for (const paper of student.papers) {
         formData.append("image", base64ToBlob(paper.base64, paper.mimeType), paper.filename);
       }
@@ -335,12 +328,6 @@ export default function OnboardingUploadPage() {
 
         {mode === "photo" ? (
           <div className="space-y-3">
-            <ParsePresetPicker
-              surface="student_ocr"
-              value={parsePreset}
-              onChange={setParsePreset}
-              disabled={isBusy}
-            />
             <PageStagingGrid
               key={stagingKey}
               onFilesChange={setPhotoFiles}

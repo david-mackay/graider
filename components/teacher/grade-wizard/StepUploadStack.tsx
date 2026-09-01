@@ -3,12 +3,8 @@
 import { useState } from "react";
 import { Card, btnPrimary, btnSecondary } from "@/components/shared/ui";
 import PageStagingGrid from "@/components/shared/PageStagingGrid";
-import ParsePresetPicker from "@/components/shared/ParsePresetPicker";
 import CopyableError from "@/components/shared/CopyableError";
-import {
-  defaultPresetForSurface,
-  type DocumentParsePreset,
-} from "@/lib/parse-presets";
+import { UNIFIED_PARSE_PRESET, type DocumentParsePreset } from "@/lib/parse-presets";
 import type { TestSummary } from "@/lib/types";
 
 type StepUploadStackProps = {
@@ -30,9 +26,6 @@ export default function StepUploadStack({
 }: StepUploadStackProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [localError, setLocalError] = useState("");
-  const [parsePreset, setParsePreset] = useState<DocumentParsePreset>(() =>
-    defaultPresetForSurface("grade_stack"),
-  );
 
   const combinedError = errorMessage || localError;
 
@@ -47,7 +40,7 @@ export default function StepUploadStack({
       setLocalError("Add at least one photo or PDF to continue.");
       return;
     }
-    void onSubmit(files, parsePreset);
+    void onSubmit(files, UNIFIED_PARSE_PRESET);
   }
 
   return (
@@ -57,22 +50,13 @@ export default function StepUploadStack({
           <div>
             <h3 className="font-display text-lg font-semibold text-ink">{selectedTest.title}</h3>
             <p className="text-xs text-ink-soft">
-              Drop photos or scanned PDFs of the class set. &ldquo;Scanned / photo&rdquo; is the right
-              document type for camera shots and scan PDFs.
+              Drop photos or a scanned PDF of the class set. Handwriting over printed text is read the same way for both.
             </p>
           </div>
           <span className="text-xs font-bold text-ink-faint">
             {files.length} / 10 pages
           </span>
         </div>
-
-        <ParsePresetPicker
-          surface="grade_stack"
-          value={parsePreset}
-          onChange={setParsePreset}
-          disabled={isBusy}
-          className="mb-4"
-        />
 
         <PageStagingGrid
           onFilesChange={handleFilesChange}
