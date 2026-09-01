@@ -29,11 +29,13 @@ import {
   type GradingPhase,
   type StudentGradingProgress,
 } from "@/lib/grading-progress";
+import { resolveJobResumeTarget, testSummaryFromJob } from "@/lib/resume-grade-job";
 import type {
   GradeStackJob,
   OcrAnswer,
   StackCommitResult,
   StackPreview,
+  TestDetail,
   TestSummary,
 } from "@/lib/types";
 
@@ -78,6 +80,7 @@ export type UseStudentGradeReturn = {
     cancelSend: (studentId: string) => Promise<void>;
     openReview: () => void;
     confirmAll: () => Promise<void>;
+    resumeFromJob: (jobId: string) => Promise<void>;
     back: () => void;
     restart: () => void;
     clearError: () => void;
@@ -88,6 +91,26 @@ async function fetchJob(jobId: string, signal?: AbortSignal): Promise<GradeStack
   return handleJson<GradeStackJob>(
     await fetch(`/api/grade-stack/jobs/${jobId}`, { cache: "no-store", signal }),
   );
+}
+
+async function fetchTestSummary(testId: string): Promise<TestSummary> {
+  const detail = await handleJson<{ test: TestDetail }>(
+    await fetch(`/api/tests/${testId}`, { cache: "no-store" }),
+  );
+  const test = detail.test;
+  return {
+    id: test.id,
+    title: test.title,
+    class_id: test.class_id,
+    teacher_id: test.teacher_id,
+    status: test.status,
+    opens_at: test.opens_at,
+    closes_at: test.closes_at,
+    duration_minutes: test.duration_minutes,
+    allow_late_submit: test.allow_late_submit,
+    grades_released: false,
+    show_ai_feedback: false,
+  };
 }
 
 async function pollJobUntilTerminal(
@@ -580,6 +603,70 @@ export function useStudentGrade(): UseStudentGradeReturn {
     }
   }, [pageToStudentId, preview, previewJobId, selectedTest]);
 
+  const resumeFromJob = useCallback(async (jobId: string) => {
+    setErrorMessage("");
+    setLimitCode(null);
+    setState("grading");
+
+    try {
+      let job = await fetchJob(jobId);
+      setGradingPhase(job.phase === "commit" ? "commit" : "preview");
+      setActiveJob(job);
+      let target = resolveJobResumeTarget(job);
+
+      if (target.kind === "wait") {
+        job = await pollJobUntilTerminal(jobId, {
+          onUpdate: (update) => {
+            setActiveJob(update);
+          },
+        });
+        target = resolveJobResumeTarget(job);
+      }
+
+      let test: TestSummary;
+      try {
+        test = await fetchTestSummary(job.testId);
+      } catch {
+        test = testSummaryFromJob(job, job.preview?.discovery?.testTitle ?? "Test");
+      }
+      setSelectedTest(test);
+
+      if (target.kind === "failed") {
+        setErrorMessage(target.message);
+        setGradingPhase(null);
+        setActiveJob(null);
+        setState("pickTest");
+        throw new Error(target.message);
+      }
+
+      if (target.kind === "review") {
+        setPreviewJobId(target.previewJobId);
+        setPreview({ pages: job.preview?.pages ?? [] });
+        setPageToStudentId(target.pageToStudentId);
+        setGradingPhase(null);
+        setActiveJob(null);
+        setState("reviewing");
+        return;
+      }
+
+      if (target.kind === "results") {
+        setResults({ results: job.commit?.results ?? [] });
+        setGradingPhase(null);
+        setActiveJob(null);
+        setState("results");
+        return;
+      }
+
+      throw new Error("This grading job is not ready to open yet.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not open grading job.");
+      setGradingPhase(null);
+      setActiveJob(null);
+      setState("pickTest");
+      throw error;
+    }
+  }, []);
+
   const back = useCallback(() => {
     setErrorMessage("");
     setState((prev) => {
@@ -633,6 +720,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
       cancelSend,
       openReview,
       confirmAll,
+      resumeFromJob,
       back,
       restart,
       clearError,
@@ -651,6 +739,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
       cancelSend,
       openReview,
       confirmAll,
+      resumeFromJob,
       back,
       restart,
       clearError,

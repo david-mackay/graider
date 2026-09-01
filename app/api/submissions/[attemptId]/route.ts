@@ -4,6 +4,10 @@ import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, classMemberships, appUsers } from "@/drizzle/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { assertCanViewAttemptDetail } from "@/lib/submission-access-policy";
+import { expandPaperUploadPaths } from "@/lib/pdf-page-images";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type Params = { attemptId: string };
 type RouteContext = { params: Params | Promise<Params> };
@@ -87,6 +91,25 @@ export async function GET(_request: Request, { params }: RouteContext) {
     }
     const isTeacher = access.isTeacher;
 
+    let paperUploads = attempt.ocrUploads ?? [];
+    if (
+      isTeacher &&
+      paperUploads.some((storagePath) => storagePath.toLowerCase().endsWith(".pdf"))
+    ) {
+      try {
+        const expanded = await expandPaperUploadPaths(paperUploads);
+        if (expanded.join() !== paperUploads.join()) {
+          await db
+            .update(testAttempts)
+            .set({ ocrUploads: expanded })
+            .where(eq(testAttempts.id, attemptId));
+          paperUploads = expanded;
+        }
+      } catch {
+        // Keep the original PDF path if rasterizing fails.
+      }
+    }
+
     const tqRows = await db
       .select({
         questionId: testQuestions.questionId,
@@ -154,7 +177,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
         graded_at: attempt.gradedAt?.toISOString() ?? null,
         updated_at: attempt.updatedAt?.toISOString() ?? null,
         test_class_id: test.classId,
-        ocr_uploads: attempt.ocrUploads ?? [],
+        ocr_uploads: paperUploads,
         questions,
       },
     });

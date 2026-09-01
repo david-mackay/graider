@@ -252,6 +252,15 @@ export type GradeStackJob = {
   updatedAt: string;
 };
 
+export type ResumableGradeJob = {
+  id: string;
+  testId: string;
+  testTitle: string;
+  pageCount: number;
+  studentCount: number;
+  updatedAt: string;
+};
+
 export type GradeStackPreviewJobInput = {
   storagePaths: string[];
   imageMeta: { filename: string; mimeType: string }[];

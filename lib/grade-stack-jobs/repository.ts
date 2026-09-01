@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { gradeStackJobs } from "@/drizzle/schema";
+import { gradeStackJobs, tests } from "@/drizzle/schema";
 import {
   GradeStackCommitJobInput,
   GradeStackCommitPayload,
@@ -10,7 +10,7 @@ import {
   GradeStackPreviewJobInput,
   GradeStackPreviewPayload,
 } from "@/lib/types";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 type CreateJobParams = {
   phase: GradeStackJobPhase;
@@ -189,4 +189,66 @@ export async function incrementAttemptCount(jobId: string) {
       updatedAt: new Date(),
     })
     .where(eq(gradeStackJobs.id, jobId));
+}
+
+export async function listResumablePreviewJobs(teacherId: string) {
+  const previews = await db
+    .select({
+      id: gradeStackJobs.id,
+      testId: gradeStackJobs.testId,
+      testTitle: tests.title,
+      previewPayload: gradeStackJobs.previewPayload,
+      inputPayload: gradeStackJobs.inputPayload,
+      updatedAt: gradeStackJobs.updatedAt,
+    })
+    .from(gradeStackJobs)
+    .innerJoin(tests, eq(tests.id, gradeStackJobs.testId))
+    .where(
+      and(
+        eq(gradeStackJobs.teacherId, teacherId),
+        eq(gradeStackJobs.phase, "preview"),
+        eq(gradeStackJobs.status, "needs_review"),
+      ),
+    )
+    .orderBy(desc(gradeStackJobs.updatedAt))
+    .limit(30);
+
+  if (previews.length === 0) return [];
+
+  const commits = await db
+    .select({ previewJobId: gradeStackJobs.previewJobId })
+    .from(gradeStackJobs)
+    .where(
+      and(
+        eq(gradeStackJobs.teacherId, teacherId),
+        eq(gradeStackJobs.phase, "commit"),
+        inArray(gradeStackJobs.status, ["completed", "processing", "queued"]),
+        inArray(
+          gradeStackJobs.previewJobId,
+          previews.map((row) => row.id),
+        ),
+      ),
+    );
+  const consumed = new Set(
+    commits.map((row) => row.previewJobId).filter((id): id is string => typeof id === "string"),
+  );
+
+  return previews
+    .filter((row) => !consumed.has(row.id))
+    .map((row) => {
+      const preview = row.previewPayload as GradeStackPreviewPayload | null;
+      const input = row.inputPayload as GradeStackPreviewJobInput | null;
+      const pages = preview?.pages ?? [];
+      const assignments =
+        preview?.studentPageAssignments ?? input?.studentPageAssignments ?? [];
+      const studentIds = new Set(assignments.map((item) => item.studentId));
+      return {
+        id: row.id,
+        testId: row.testId,
+        testTitle: row.testTitle,
+        pageCount: pages.length || assignments.length,
+        studentCount: studentIds.size,
+        updatedAt: row.updatedAt ?? new Date(),
+      };
+    });
 }

@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { extractHandwrittenStack } from "@/lib/reducto";
 import { coerceParsePreset, type DocumentParsePreset } from "@/lib/parse-presets";
 import { gradeOneAttempt } from "@/lib/grading";
+import { expandPaperUploadPaths } from "@/lib/pdf-page-images";
 import {
   OcrAnswer,
   RosterEntry,
@@ -107,9 +108,10 @@ function minNullable(...values: Array<number | null>): number | null {
 
 /**
  * Match OCR rows onto test questions.
- * Prefer exact/normalized prompt match; fall back to printed question_index
- * (1-based or 0-based) — critical for MCQ sheets where stems OCR poorly.
- * Multiple OCR rows for the same question are concatenated, not overwritten.
+ * Prompt-match unmerged rows first so a long later question that was stamped
+ * with question_index 1 is not concatenated onto Q1. Then merge remaining
+ * same-number fragments, map by printed index, and split a stolen tail if
+ * one answer still contains another question's stem or key.
  */
 function printedIndexesCollapsedToOne(extracted: OcrAnswer[]): boolean {
   const indexes = extracted
@@ -122,24 +124,87 @@ function printedIndexesCollapsedToOne(extracted: OcrAnswer[]): boolean {
   return indexes.length > 1 && new Set(indexes).size === 1;
 }
 
+export type MatchableQuestion = {
+  questionId: string;
+  prompt: string;
+  correctAnswer?: string | null;
+};
+
+const KEY_STOPWORDS = new Set(["mark", "marks", "point", "points", "pts", "key"]);
+
+function distinctiveNeedles(question: MatchableQuestion): string[] {
+  const needles: string[] = [];
+  const prompt = normalizeQuestion(question.prompt);
+  if (prompt.length >= 24) needles.push(prompt.slice(0, 48));
+  const keySource = (question.correctAnswer ?? "")
+    .split(/\n+|–|—/)[0]
+    ?.trim() ?? "";
+  const keyWords = normalizeQuestion(keySource)
+    .split(/\s+/)
+    .filter((word) => word.length > 1 && !/^\d+$/.test(word) && !KEY_STOPWORDS.has(word));
+  if (keyWords.length >= 3) needles.push(keyWords.slice(0, 3).join(" "));
+  if (keyWords.length >= 2) needles.push(keyWords.slice(0, 2).join(" "));
+  return needles;
+}
+
+function cutIndexForNeedle(answer: string, needle: string): number {
+  const words = needle.trim().split(/\s+/).filter(Boolean).slice(0, 4);
+  if (words.length < 2) return -1;
+  const pattern = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
+  const match = answer.match(new RegExp(pattern, "i"));
+  return typeof match?.index === "number" ? match.index : -1;
+}
+
+/** If Q1's answer still contains Q21's stem/key, move that tail onto Q21. */
+export function splitStolenAnswerTails(
+  rows: { questionId: string; studentAnswer: string }[],
+  questions: MatchableQuestion[],
+): { questionId: string; studentAnswer: string }[] {
+  const next = rows.map((row) => ({ ...row }));
+  const assigned = new Set(next.map((row) => row.questionId));
+
+  for (const question of questions) {
+    if (assigned.has(question.questionId)) continue;
+    for (const needle of distinctiveNeedles(question)) {
+      const owner = next.find((row) => {
+        if (row.questionId === question.questionId) return false;
+        return normalizeQuestion(row.studentAnswer).indexOf(needle) >= 24;
+      });
+      if (!owner) continue;
+      const cut = cutIndexForNeedle(owner.studentAnswer, needle);
+      if (cut < 20) continue;
+      const stolen = owner.studentAnswer.slice(cut).trim();
+      owner.studentAnswer = owner.studentAnswer.slice(0, cut).trim();
+      if (!stolen) continue;
+      next.push({ questionId: question.questionId, studentAnswer: stolen });
+      assigned.add(question.questionId);
+      break;
+    }
+  }
+
+  return next.filter((row) => row.studentAnswer);
+}
+
 export function matchOcrAnswersToQuestions(
   extracted: OcrAnswer[],
-  questions: { questionId: string; prompt: string }[],
+  questions: MatchableQuestion[],
 ): { questionId: string; studentAnswer: string }[] {
   const zipByOrder =
     printedIndexesCollapsedToOne(extracted) &&
     extracted.length === questions.length &&
     questions.length > 1;
   if (zipByOrder) {
-    return questions
-      .map((q, i) => ({
-        questionId: q.questionId,
-        studentAnswer: (extracted[i]?.answer ?? "").trim(),
-      }))
-      .filter((row) => row.studentAnswer);
+    return splitStolenAnswerTails(
+      questions
+        .map((q, i) => ({
+          questionId: q.questionId,
+          studentAnswer: (extracted[i]?.answer ?? "").trim(),
+        }))
+        .filter((row) => row.studentAnswer),
+      questions,
+    );
   }
 
-  const merged = mergeOcrAnswersByQuestionNumber(extracted);
   const byPrompt = new Map<string, string>();
   for (const q of questions) {
     byPrompt.set(normalizeQuestion(q.prompt), q.questionId);
@@ -148,6 +213,7 @@ export function matchOcrAnswersToQuestions(
 
   const used = new Set<string>();
   const rows: { questionId: string; studentAnswer: string }[] = [];
+  const claimed = new Set<number>();
 
   const tryAdd = (questionId: string | undefined, answer: string) => {
     const trimmed = answer.trim();
@@ -163,6 +229,15 @@ export function matchOcrAnswersToQuestions(
     return true;
   };
 
+  extracted.forEach((entry, index) => {
+    if (tryAdd(byPrompt.get(normalizeQuestion(entry.question)), entry.answer)) {
+      claimed.add(index);
+    }
+  });
+
+  const leftover = extracted.filter((_, index) => !claimed.has(index));
+  const merged = mergeOcrAnswersByQuestionNumber(leftover);
+
   for (const entry of merged) {
     if (tryAdd(byPrompt.get(normalizeQuestion(entry.question)), entry.answer)) {
       continue;
@@ -170,7 +245,6 @@ export function matchOcrAnswersToQuestions(
 
     if (typeof entry.question_index === "number" && Number.isFinite(entry.question_index)) {
       const raw = Math.trunc(entry.question_index);
-      // Prefer 1-based printed numbers; also accept 0-based indexes.
       const candidates = raw >= 1 ? [raw - 1, raw] : [raw];
       for (const idx of candidates) {
         const q = questions[idx];
@@ -179,14 +253,13 @@ export function matchOcrAnswersToQuestions(
     }
   }
 
-  // Positional fallback when counts line up and little matched by prompt/index.
   if (rows.length === 0 && merged.length > 0 && merged.length === questions.length) {
     for (let i = 0; i < merged.length; i += 1) {
       tryAdd(questions[i]?.questionId, merged[i]?.answer ?? "");
     }
   }
 
-  return rows;
+  return splitStolenAnswerTails(rows, questions);
 }
 
 /**
@@ -468,6 +541,7 @@ export async function commitStack(params: {
     .select({
       questionId: testQuestions.questionId,
       prompt: questionBank.prompt,
+      correctAnswer: questionBank.correctAnswer,
       qbId: questionBank.id,
     })
     .from(testQuestions)
@@ -478,6 +552,7 @@ export async function commitStack(params: {
   const questionsForMatch = tqRows.map((row) => ({
     questionId: row.questionId,
     prompt: row.prompt,
+    correctAnswer: row.correctAnswer,
   }));
 
   // Group pages by student so multi-page submissions grade once per student.
@@ -555,10 +630,11 @@ export async function commitStack(params: {
       for (const path of studentPages.storagePaths) {
         if (!merged.includes(path)) merged.push(path);
       }
-      if (merged.length !== existingUploads.length) {
+      const paperPaths = await expandPaperUploadPaths(merged);
+      if (paperPaths.join() !== existingUploads.join()) {
         await db
           .update(testAttempts)
-          .set({ ocrUploads: merged })
+          .set({ ocrUploads: paperPaths })
           .where(eq(testAttempts.id, attemptId));
       }
     }

@@ -5,6 +5,7 @@ import { uploadFile } from "@/lib/storage";
 import { extractHandwrittenAnswers } from "@/lib/reducto";
 import { coerceParsePreset } from "@/lib/parse-presets";
 import { matchOcrAnswersToQuestions } from "@/lib/stack-grading";
+import { expandPaperUploadPaths } from "@/lib/pdf-page-images";
 import { canApplyOcrToAttempt } from "@/lib/attempt-ocr-policy";
 import { db } from "@/lib/db";
 import { testAttempts, tests, testQuestions, questionBank, attemptAnswers, ocrBatches } from "@/drizzle/schema";
@@ -96,10 +97,11 @@ export async function POST(request: NextRequest) {
     );
 
     const tqRows = await db
-      .select({
-        questionId: testQuestions.questionId,
-        prompt: questionBank.prompt,
-      })
+        .select({
+          questionId: testQuestions.questionId,
+          prompt: questionBank.prompt,
+          correctAnswer: questionBank.correctAnswer,
+        })
       .from(testQuestions)
       .innerJoin(questionBank, eq(testQuestions.questionId, questionBank.id))
       .where(eq(testQuestions.testId, attempt.testId))
@@ -131,7 +133,10 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (existingAttempt) {
-      const nextUploads = [...(existingAttempt.ocrUploads ?? []), ...storedPaths];
+      const nextUploads = await expandPaperUploadPaths([
+        ...(existingAttempt.ocrUploads ?? []),
+        ...storedPaths,
+      ]);
       await db
         .update(testAttempts)
         .set({ ocrUploads: nextUploads })

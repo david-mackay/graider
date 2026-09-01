@@ -331,7 +331,10 @@ export default function GradeWizard() {
         <>
           {studentState === "pickTest" ? (
             <div className="space-y-4">
-              <StepPickTest onSelect={studentActions.selectTest} />
+              <StepPickTest
+                onSelect={studentActions.selectTest}
+                onResumeJob={(jobId) => void studentActions.resumeFromJob(jobId)}
+              />
               <Card className="flex flex-wrap items-center justify-between gap-3 bg-cream/60">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.15em] text-ink-faint">
@@ -477,7 +480,13 @@ export default function GradeWizard() {
                   Grade student-by-student instead
                 </button>
               </Card>
-              <StepPickTest onSelect={stackActions.selectTest} />
+              <StepPickTest
+                onSelect={stackActions.selectTest}
+                onResumeJob={(jobId) => {
+                  switchToStudentFirst();
+                  void studentActions.resumeFromJob(jobId);
+                }}
+              />
             </div>
           ) : null}
 

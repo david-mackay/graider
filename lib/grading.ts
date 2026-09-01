@@ -74,21 +74,27 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
 
   for (const question of tqRows) {
     const answer = answerByQuestion.get(question.questionId);
-    const studentAnswer = answer?.studentAnswer ?? "";
+    const studentAnswer = (answer?.studentAnswer ?? "").trim();
     const isMcq = question.questionType === "mcq";
 
-    const grade = isMcq
-      ? gradeMcqExact({
-          teacherAnswer: question.correctAnswer,
-          studentAnswer,
-          marks: question.marks,
-        })
-      : await gradeQuestion({
-          question: question.prompt,
-          marks: question.marks,
-          teacher_answer: question.correctAnswer,
-          student_answer: studentAnswer,
-        });
+    const grade =
+      studentAnswer.length === 0
+        ? {
+            marks_earned: 0,
+            feedback: "No student answer was read for this question.",
+          }
+        : isMcq
+          ? gradeMcqExact({
+              teacherAnswer: question.correctAnswer,
+              studentAnswer,
+              marks: question.marks,
+            })
+          : await gradeQuestion({
+              question: question.prompt,
+              marks: question.marks,
+              teacher_answer: question.correctAnswer,
+              student_answer: studentAnswer,
+            });
 
     maxTotal += question.marks;
     earnedTotal += grade.marks_earned;
@@ -100,6 +106,27 @@ export async function gradeOneAttempt(attemptId: string, testId: string): Promis
         feedback: grade.feedback,
         gradedBy: gradeAttributionForQuestionType(question.questionType),
       });
+    } else {
+      const [inserted] = await db
+        .insert(attemptAnswers)
+        .values({
+          attemptId,
+          questionId: question.questionId,
+          studentAnswer,
+          marksEarned: grade.marks_earned,
+          feedback: grade.feedback,
+          gradedBy: gradeAttributionForQuestionType(question.questionType),
+          updatedAt: new Date(),
+        })
+        .returning({ id: attemptAnswers.id });
+      if (inserted) {
+        gradeRows.push({
+          id: inserted.id,
+          marksEarned: grade.marks_earned,
+          feedback: grade.feedback,
+          gradedBy: gradeAttributionForQuestionType(question.questionType),
+        });
+      }
     }
 
     graded.push({

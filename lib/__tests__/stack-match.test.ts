@@ -51,12 +51,11 @@ describe("stack-grading matchOcrAnswersToQuestions", () => {
       ],
       questions,
     );
+    const byId = Object.fromEntries(rows.map((row) => [row.questionId, row.studentAnswer]));
     assert.equal(rows.length, 2);
-    assert.equal(rows[0].questionId, "q1");
-    assert.match(rows[0].studentAnswer, /leaving a patient/);
-    assert.match(rows[0].studentAnswer, /unlawful touching/);
-    assert.equal(rows[1].questionId, "q2");
-    assert.equal(rows[1].studentAnswer, "PPE and hand washing");
+    assert.match(byId.q1, /leaving a patient/);
+    assert.match(byId.q1, /unlawful touching/);
+    assert.equal(byId.q2, "PPE and hand washing");
   });
 
   it("does not treat same-number fragments as later questions", () => {
@@ -109,6 +108,65 @@ describe("stack-grading matchOcrAnswersToQuestions", () => {
       rows.map((row) => row.studentAnswer),
       ["alpha", "beta", "gamma"],
     );
+  });
+
+  it("does not merge a later question into Q1 when the stem matches Q21", () => {
+    const questions = [
+      { questionId: "q1", prompt: "Define any three of the following", correctAnswer: "Scope of practice" },
+      { questionId: "q2", prompt: "List two ways to prevent exposure", correctAnswer: "PPE" },
+      {
+        questionId: "q21",
+        prompt:
+          "You are dispatched to a residence for an unconscious man in the front yard. Describe in SEQUENTIAL ORDER how you would manage this patient",
+        correctAnswer: "Scene Size up – 6 marks. Primary Assessment – 26 marks.",
+      },
+    ];
+    const rows = matchOcrAnswersToQuestions(
+      [
+        { question: "abandonment", answer: "leaving a patient without consent", question_index: 1 },
+        {
+          question:
+            "You are dispatched to a residence for an unconscious man in the front yard. Describe in SEQUENTIAL ORDER how you would manage this patient",
+          answer: "BSI, scene safety, then primary assessment",
+          question_index: 1,
+        },
+      ],
+      questions,
+    );
+    const byId = Object.fromEntries(rows.map((row) => [row.questionId, row.studentAnswer]));
+    assert.match(byId.q1, /leaving a patient/);
+    assert.equal(byId.q1.includes("primary assessment"), false);
+    assert.match(byId.q21, /primary assessment/);
+  });
+
+  it("splits a concatenated Q1 answer when the tail belongs to the last question", () => {
+    const questions = [
+      {
+        questionId: "q1",
+        prompt: "Define any three of the following",
+        correctAnswer: "Scope of practice, negligence, abandonment",
+      },
+      {
+        questionId: "q21",
+        prompt: "Describe in sequential order how you would manage this patient",
+        correctAnswer: "Scene Size up – 6 marks\nPrimary Assessment – 26 marks",
+      },
+    ];
+    const rows = matchOcrAnswersToQuestions(
+      [
+        {
+          question: "Define any three of the following",
+          answer:
+            "Scope of practice: what an EMT is allowed to do. Negligence: failure to act.\n\n(1) Scene size up – PPE, scene safety, then ALS.",
+          question_index: 1,
+        },
+      ],
+      questions,
+    );
+    const byId = Object.fromEntries(rows.map((row) => [row.questionId, row.studentAnswer]));
+    assert.match(byId.q1, /Scope of practice/);
+    assert.equal(/scene size up/i.test(byId.q1), false);
+    assert.match(byId.q21, /Scene size up/i);
   });
 });
 
