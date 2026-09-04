@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { tests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { OcrAnswer, StackAssignment } from "@/lib/types";
+import { coercePrintedQuestionIndex } from "@/lib/question-index";
 import {
   clearIdempotencyKey,
   createGradeStackJob,
@@ -45,8 +46,7 @@ function parseAssignments(raw: unknown): StackAssignment[] | null {
       ocrAnswers: ocrAnswersRaw.map((answer) => ({
         question: answer.question,
         answer: answer.answer,
-        question_index:
-          typeof answer.question_index === "number" ? answer.question_index : null,
+        question_index: coercePrintedQuestionIndex(answer.question_index),
       })),
       storagePath:
         typeof record.storagePath === "string"

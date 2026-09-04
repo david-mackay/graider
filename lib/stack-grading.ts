@@ -13,6 +13,7 @@ import { extractHandwrittenStack } from "@/lib/reducto";
 import { coerceParsePreset, type DocumentParsePreset } from "@/lib/parse-presets";
 import { gradeOneAttempt } from "@/lib/grading";
 import { expandPaperUploadPaths } from "@/lib/pdf-page-images";
+import { coercePrintedQuestionIndex } from "@/lib/question-index";
 import {
   OcrAnswer,
   RosterEntry,
@@ -57,6 +58,14 @@ function formatOcrPart(entry: OcrAnswer): string {
   return answer || question;
 }
 
+function printedIndexOf(entry: OcrAnswer): number | null {
+  return coercePrintedQuestionIndex(entry.question_index);
+}
+
+function withPrintedIndex(entry: OcrAnswer): OcrAnswer {
+  return { ...entry, question_index: printedIndexOf(entry) };
+}
+
 /**
  * Combine OCR fragments that share a printed question number
  * (e.g. "define any 3 of 4" split into four Q1 rows) so they grade as one answer.
@@ -66,9 +75,7 @@ export function mergeOcrAnswersByQuestionNumber(extracted: OcrAnswer[]): OcrAnsw
   const indexToGroup = new Map<number, number>();
 
   for (const entry of extracted) {
-    const raw = entry.question_index;
-    const index =
-      typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : null;
+    const index = printedIndexOf(entry);
     if (index === null) {
       groups.push([entry]);
       continue;
@@ -115,11 +122,7 @@ function minNullable(...values: Array<number | null>): number | null {
  */
 function printedIndexesCollapsedToOne(extracted: OcrAnswer[]): boolean {
   const indexes = extracted
-    .map((entry) =>
-      typeof entry.question_index === "number" && Number.isFinite(entry.question_index)
-        ? Math.trunc(entry.question_index)
-        : null,
-    )
+    .map((entry) => printedIndexOf(entry))
     .filter((n): n is number => n !== null);
   return indexes.length > 1 && new Set(indexes).size === 1;
 }
@@ -174,8 +177,9 @@ export function splitStolenAnswerTails(
       const cut = cutIndexForNeedle(owner.studentAnswer, needle);
       if (cut < 20) continue;
       const stolen = owner.studentAnswer.slice(cut).trim();
-      owner.studentAnswer = owner.studentAnswer.slice(0, cut).trim();
-      if (!stolen) continue;
+      const kept = owner.studentAnswer.slice(0, cut).trim();
+      if (!stolen || !kept) continue;
+      owner.studentAnswer = kept;
       next.push({ questionId: question.questionId, studentAnswer: stolen });
       assigned.add(question.questionId);
       break;
@@ -189,16 +193,18 @@ export function matchOcrAnswersToQuestions(
   extracted: OcrAnswer[],
   questions: MatchableQuestion[],
 ): { questionId: string; studentAnswer: string }[] {
+  const normalized = extracted.map(withPrintedIndex);
   const zipByOrder =
-    printedIndexesCollapsedToOne(extracted) &&
-    extracted.length === questions.length &&
+    printedIndexesCollapsedToOne(normalized) &&
+    normalized.length === questions.length &&
     questions.length > 1;
   if (zipByOrder) {
     return splitStolenAnswerTails(
       questions
         .map((q, i) => ({
           questionId: q.questionId,
-          studentAnswer: (extracted[i]?.answer ?? "").trim(),
+          studentAnswer:
+            (normalized[i]?.answer ?? "").trim() || (normalized[i]?.question ?? "").trim(),
         }))
         .filter((row) => row.studentAnswer),
       questions,
@@ -215,10 +221,11 @@ export function matchOcrAnswersToQuestions(
   const rows: { questionId: string; studentAnswer: string }[] = [];
   const claimed = new Set<number>();
 
-  const tryAdd = (questionId: string | undefined, answer: string) => {
+  const tryAdd = (questionId: string | undefined, answer: string, allowMerge = true) => {
     const trimmed = answer.trim();
     if (!questionId || !trimmed) return false;
     if (used.has(questionId)) {
+      if (!allowMerge) return false;
       const existing = rows.find((row) => row.questionId === questionId);
       if (!existing) return false;
       existing.studentAnswer = joinAnswerParts([existing.studentAnswer, trimmed]);
@@ -229,33 +236,40 @@ export function matchOcrAnswersToQuestions(
     return true;
   };
 
-  extracted.forEach((entry, index) => {
-    if (tryAdd(byPrompt.get(normalizeQuestion(entry.question)), entry.answer)) {
+  normalized.forEach((entry, index) => {
+    const promptId = byPrompt.get(normalizeQuestion(entry.question));
+    if (promptId && tryAdd(promptId, entry.answer)) {
       claimed.add(index);
     }
   });
 
-  const leftover = extracted.filter((_, index) => !claimed.has(index));
+  const leftover = normalized.filter((_, index) => !claimed.has(index));
   const merged = mergeOcrAnswersByQuestionNumber(leftover);
 
   for (const entry of merged) {
-    if (tryAdd(byPrompt.get(normalizeQuestion(entry.question)), entry.answer)) {
+    const promptId = byPrompt.get(normalizeQuestion(entry.question));
+    const text = entry.answer.trim() || (promptId ? "" : formatOcrPart(entry));
+    if (tryAdd(promptId, text)) {
       continue;
     }
 
-    if (typeof entry.question_index === "number" && Number.isFinite(entry.question_index)) {
-      const raw = Math.trunc(entry.question_index);
-      const candidates = raw >= 1 ? [raw - 1, raw] : [raw];
-      for (const idx of candidates) {
-        const q = questions[idx];
-        if (q && tryAdd(q.questionId, entry.answer)) break;
-      }
-    }
+    const raw = printedIndexOf(entry);
+    if (raw === null) continue;
+
+    const oneBased = raw >= 1 ? raw - 1 : raw;
+    const zeroBased = raw;
+    const unusedSlot = [oneBased, zeroBased].find((idx) => {
+      const q = questions[idx];
+      return q && !used.has(q.questionId);
+    });
+    const idx = unusedSlot ?? oneBased;
+    const q = questions[idx];
+    if (q) tryAdd(q.questionId, text, unusedSlot === undefined);
   }
 
   if (rows.length === 0 && merged.length > 0 && merged.length === questions.length) {
     for (let i = 0; i < merged.length; i += 1) {
-      tryAdd(questions[i]?.questionId, merged[i]?.answer ?? "");
+      tryAdd(questions[i]?.questionId, formatOcrPart(merged[i] ?? { question: "", answer: "" }));
     }
   }
 

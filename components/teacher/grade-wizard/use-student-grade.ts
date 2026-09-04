@@ -572,7 +572,7 @@ export function useStudentGrade(): UseStudentGradeReturn {
             previewJobId,
             testId,
             assignments: payloadAssignments,
-            idempotencyKey: `student-first-commit:${testId}:${payloadAssignments
+            idempotencyKey: `student-first-commit:v2:${testId}:${payloadAssignments
               .map((e) => `${e.pageIndex}:${e.studentId}:${e.storagePath ?? ""}`)
               .join("|")}`,
           }),

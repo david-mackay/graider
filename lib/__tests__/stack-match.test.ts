@@ -168,6 +168,38 @@ describe("stack-grading matchOcrAnswersToQuestions", () => {
     assert.equal(/scene size up/i.test(byId.q1), false);
     assert.match(byId.q21, /Scene size up/i);
   });
+
+  it("maps a Q21 row whose writing landed in the question field with an empty answer", () => {
+    const questions = Array.from({ length: 21 }, (_, i) => ({
+      questionId: `q${i + 1}`,
+      prompt: i === 20 ? "Describe in sequential order how you would manage this patient" : `Question ${i + 1}`,
+    }));
+    const rows = matchOcrAnswersToQuestions(
+      [
+        {
+          question: "BSI, scene safety, then primary assessment and transport",
+          answer: "",
+          question_index: 21,
+        },
+      ],
+      questions,
+    );
+    const byId = Object.fromEntries(rows.map((row) => [row.questionId, row.studentAnswer]));
+    assert.equal(byId.q21, "BSI, scene safety, then primary assessment and transport");
+  });
+
+  it("accepts a string question_index from the review payload", () => {
+    const questions = [
+      { questionId: "q1", prompt: "Q1" },
+      { questionId: "q2", prompt: "Q2" },
+    ];
+    const rows = matchOcrAnswersToQuestions(
+      [{ question: "unclear", answer: "Paris", question_index: "2" as unknown as number }],
+      questions,
+    );
+    assert.equal(rows[0]?.questionId, "q2");
+    assert.equal(rows[0]?.studentAnswer, "Paris");
+  });
 });
 
 describe("buildStudentFirstPreviewPages storage paths", () => {

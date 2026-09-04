@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { previewStack, commitStack } from "@/lib/stack-grading";
 import { coerceParsePreset } from "@/lib/parse-presets";
 import { OcrAnswer, StackAssignment } from "@/lib/types";
+import { coercePrintedQuestionIndex } from "@/lib/question-index";
 
 export const runtime = "nodejs";
 
@@ -56,8 +57,7 @@ function parseAssignments(raw: string): StackAssignment[] | null {
       ocrAnswers: ocrAnswersRaw.map((answer) => ({
         question: answer.question,
         answer: answer.answer,
-        question_index:
-          typeof answer.question_index === "number" ? answer.question_index : null,
+        question_index: coercePrintedQuestionIndex(answer.question_index),
       })),
       storagePath:
         typeof record.storagePath === "string"
